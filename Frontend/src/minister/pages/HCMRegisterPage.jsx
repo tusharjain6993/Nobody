@@ -69,7 +69,7 @@ export default function HCMRegisterPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Registration failed");
-      setRegisteredEmail(form.email);
+      setRegisteredEmail((data.email || form.email).trim().toLowerCase());
       if (data.devOtp) setOtpValue(data.devOtp);
       setStep(2);
     } catch (err) {
@@ -508,3 +508,4 @@ export default function HCMRegisterPage() {
     </div>
   );
 }
+

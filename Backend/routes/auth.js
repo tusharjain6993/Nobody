@@ -7,15 +7,21 @@ import { sendOtpEmail } from "../utils/sendEmail.js";
 
 const router = Router();
 
+const normalizeEmail = (value = "") => String(value).trim().toLowerCase();
+const normalizeOtp = (value = "") => String(value).replace(/\D/g, "").trim();
+
 router.post("/register", async (req, res) => {
   try {
     const { name, email, phone, gender, age, aadhaar, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!name || !email || !phone || !gender || !age || !aadhaar || !password) {
+    if (!name || !normalizedEmail || !phone || !gender || !age || !aadhaar || !password) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const existingUser = await User.findOne({ $or: [{ email }, { aadhaar: aadhaar.replace(/\s/g, "") }] });
+    const cleanedAadhaar = String(aadhaar).replace(/\s/g, "");
+
+    const existingUser = await User.findOne({ $or: [{ email: normalizedEmail }, { aadhaar: cleanedAadhaar }] });
     if (existingUser && existingUser.isVerified) {
       return res.status(409).json({ message: "User with this email or Aadhaar already exists" });
     }
@@ -26,15 +32,99 @@ router.post("/register", async (req, res) => {
 
     const user = await User.create({
       name,
-      email,
+      email: normalizedEmail,
       phone,
       gender,
       age,
-      aadhaar: aadhaar.replace(/\s/g, ""),
+      aadhaar: cleanedAadhaar,
       password,
       role: "citizen",
       isVerified: false,
     });
+
+    const otp = generateOtp();
+    await Otp.deleteMany({ email: normalizedEmail });
+    await Otp.create({
+      email: normalizedEmail,
+      otp,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    let emailSent = false;
+    try {
+      await sendOtpEmail(normalizedEmail, otp);
+      emailSent = true;
+    } catch (emailErr) {
+      console.error("Email error:", emailErr.message || emailErr);
+      console.log(`\n>>> OTP for ${normalizedEmail}: ${otp} (email failed)\n`);
+    }
+
+    const response = {
+      message: emailSent
+        ? "OTP sent to your email. Please verify to complete registration."
+        : "OTP generated. Check your email (or use the dev OTP shown below).",
+      userId: user._id,
+      email: user.email,
+    };
+    if (process.env.NODE_ENV !== "production" || !emailSent) response.devOtp = otp;
+
+    res.status(201).json(response);
+  } catch (err) {
+    console.error("Register error:", err);
+    res.status(500).json({ message: err.message || "Registration failed" });
+  }
+});
+
+router.post("/verify-otp", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body?.email);
+    const otp = normalizeOtp(req.body?.otp);
+
+    if (!email || !otp) {
+      return res.status(400).json({ message: "Email and OTP are required" });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "No pending registration found for this email" });
+    }
+
+    if (user.isVerified) {
+      return res.json({ message: "Email already verified. You can login." });
+    }
+
+    // Always compare against the latest OTP for this email.
+    const record = await Otp.findOne({ email }).sort({ _id: -1 });
+    if (!record) {
+      return res.status(400).json({ message: "No OTP found. Please resend OTP." });
+    }
+
+    if (record.expiresAt < new Date()) {
+      await Otp.deleteMany({ email });
+      return res.status(400).json({ message: "OTP has expired. Please request a new one." });
+    }
+
+    if (String(record.otp) !== otp) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    await User.updateOne({ email }, { isVerified: true });
+    await Otp.deleteMany({ email });
+
+    res.json({ message: "Registration successful! You can now login." });
+  } catch (err) {
+    console.error("OTP verify error:", err);
+    res.status(500).json({ message: "Verification failed" });
+  }
+});
+
+router.post("/resend-otp", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body?.email);
+    if (!email) return res.status(400).json({ message: "Email is required" });
+
+    const user = await User.findOne({ email, isVerified: false });
+    if (!user) return res.status(404).json({ message: "No pending registration found for this email" });
 
     const otp = generateOtp();
     await Otp.deleteMany({ email });
@@ -53,74 +143,10 @@ router.post("/register", async (req, res) => {
       console.log(`\n>>> OTP for ${email}: ${otp} (email failed)\n`);
     }
 
-    const response = {
-      message: emailSent
-        ? "OTP sent to your email. Please verify to complete registration."
-        : "OTP generated. Check your email (or use the dev OTP shown below).",
-      userId: user._id,
-      email: user.email,
-    };
-    if (!emailSent) response.devOtp = otp;
+    const response = { message: "New OTP sent to your email" };
+    if (process.env.NODE_ENV !== "production" || !emailSent) response.devOtp = otp;
 
-    res.status(201).json(response);
-  } catch (err) {
-    console.error("Register error:", err);
-    res.status(500).json({ message: err.message || "Registration failed" });
-  }
-});
-
-router.post("/verify-otp", async (req, res) => {
-  try {
-    const { email, otp } = req.body;
-
-    if (!email || !otp) {
-      return res.status(400).json({ message: "Email and OTP are required" });
-    }
-
-    const record = await Otp.findOne({ email, otp });
-    if (!record) {
-      return res.status(400).json({ message: "Invalid OTP" });
-    }
-
-    if (record.expiresAt < new Date()) {
-      await Otp.deleteMany({ email });
-      return res.status(400).json({ message: "OTP has expired. Please request a new one." });
-    }
-
-    await User.updateOne({ email }, { isVerified: true });
-    await Otp.deleteMany({ email });
-
-    res.json({ message: "Registration successful! You can now login." });
-  } catch (err) {
-    console.error("OTP verify error:", err);
-    res.status(500).json({ message: "Verification failed" });
-  }
-});
-
-router.post("/resend-otp", async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ message: "Email is required" });
-
-    const user = await User.findOne({ email, isVerified: false });
-    if (!user) return res.status(404).json({ message: "No pending registration found for this email" });
-
-    const otp = generateOtp();
-    await Otp.deleteMany({ email });
-    await Otp.create({
-      email,
-      otp,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-    });
-
-    try {
-      await sendOtpEmail(email, otp);
-    } catch (emailErr) {
-      console.error("Email error:", emailErr.message || emailErr);
-      console.log(`\n>>> OTP for ${email}: ${otp} (email failed)\n`);
-    }
-
-    res.json({ message: "New OTP sent to your email" });
+    res.json(response);
   } catch (err) {
     console.error("Resend OTP error:", err);
     res.status(500).json({ message: "Failed to resend OTP" });
@@ -129,7 +155,8 @@ router.post("/resend-otp", async (req, res) => {
 
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = normalizeEmail(req.body?.email);
+    const { password } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required" });
@@ -191,3 +218,4 @@ router.get("/me", async (req, res) => {
 });
 
 export default router;
+

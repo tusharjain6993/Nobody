@@ -63,6 +63,10 @@ export const casesApi = {
   addComment: (caseId, content) => request("POST", `/cases/${caseId}/comments`, { content }, getToken()),
 };
 
+export const departmentApi = {
+  overview: () => request("GET", "/departments/overview", null, getToken()),
+};
+
 // ─── Assignments ──────────────────────────────────────────────────────────
 export const assignmentsApi = {
   create: (caseId, body) => request("POST", `/cases/${caseId}/assignments`, body, getToken()),
@@ -77,4 +81,16 @@ export const referenceApi = {
   requestCategories: () => request("GET", "/request-categories"),
   states: () => request("GET", "/states"),
   districts: (stateId) => request("GET", `/districts?stateId=${stateId}`),
+};
+
+// --- Employees -------------------------------------------------------------
+export const employeesApi = {
+  list: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ""))
+    ).toString();
+    return request("GET", `/employees${qs ? "?" + qs : ""}`, null, getToken());
+  },
+  create: (body) => request("POST", "/employees", body, getToken()),
+  setStatus: (id, isActive) => request("PATCH", `/employees/${id}/status`, { isActive }, getToken()),
 };

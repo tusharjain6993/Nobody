@@ -14,6 +14,7 @@ import HCMRegisterPage from './minister/pages/HCMRegisterPage'
 import HCMCasesListPage from './minister/pages/HCMCasesListPage'
 import HCMCaseDetailPage from './minister/pages/HCMCaseDetailPage'
 import HCMNewCasePage from './minister/pages/HCMNewCasePage'
+import CitizenMyCasesPage from './minister/pages/CitizenMyCasesPage'
 
 function App() {
   const { isAuthenticated, user } = useHCMAuth();
@@ -77,6 +78,11 @@ function App() {
           <Route path="/new-case" element={
             <ProtectedRoute allowedRoles={["citizen"]}>
               <HCMNewCasePage />
+            </ProtectedRoute>
+          } />
+          <Route path="/my-cases" element={
+            <ProtectedRoute allowedRoles={["citizen"]}>
+              <CitizenMyCasesPage />
             </ProtectedRoute>
           } />
 

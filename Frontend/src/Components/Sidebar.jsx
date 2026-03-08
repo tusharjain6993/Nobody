@@ -106,13 +106,22 @@ function Sidebar({ collapsed, onToggle }) {
 
                         {/* Citizen-only: Add Case */}
                         {userRole === "citizen" && (
-                            <SidebarItem
-                                type="NavLink"
-                                to="/new-case"
-                                icon={LuFilePlus}
-                                label="Add Case"
-                                collapsed={collapsed}
-                            />
+                            <>
+                                <SidebarItem
+                                    type="NavLink"
+                                    to="/new-case"
+                                    icon={LuFilePlus}
+                                    label="Add Case"
+                                    collapsed={collapsed}
+                                />
+                                <SidebarItem
+                                    type="NavLink"
+                                    to="/my-cases"
+                                    icon={LuLandmark}
+                                    label="Track Cases"
+                                    collapsed={collapsed}
+                                />
+                            </>
                         )}
 
                         {/* Settings — visible to everyone */}

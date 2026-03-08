@@ -4,8 +4,9 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import authRoutes from "./routes/auth.js";
+import caseRoutes from "./routes/cases.js";
+import employeeRoutes from "./routes/employees.js";
 import User from "./models/User.js";
-import bcrypt from "bcryptjs";
 
 dotenv.config();
 
@@ -16,12 +17,15 @@ app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 app.use("/api/v1", authRoutes);
+app.use("/api/v1", caseRoutes);
+app.use("/api/v1", employeeRoutes);
 
 app.get("/", (req, res) => {
   res.json({ status: "HCM Backend running" });
 });
 
 async function startServer() {
+  // Use default temp db path to avoid stale lock-file conflicts on restarts.
   const mongod = await MongoMemoryServer.create();
   const uri = mongod.getUri();
 
@@ -44,6 +48,38 @@ async function startServer() {
     console.log("Admin seeded: admin@portal.gov / admin123");
   }
 
+  const demoCitizen = await User.findOne({ email: "citizen@test.com" });
+  if (!demoCitizen) {
+    await User.create({
+      name: "Citizen User",
+      email: "citizen@test.com",
+      phone: "9876543210",
+      gender: "MALE",
+      age: 30,
+      aadhaar: "123412341234",
+      password: "test123",
+      role: "citizen",
+      isVerified: true,
+    });
+    console.log("Citizen seeded: citizen@test.com / test123");
+  }
+
+  const amanCitizen = await User.findOne({ email: "amanmathssogani@gmail.com" });
+  if (!amanCitizen) {
+    await User.create({
+      name: "Aman Sogani",
+      email: "amanmathssogani@gmail.com",
+      phone: "9876543215",
+      gender: "MALE",
+      age: 25,
+      aadhaar: "345678901234",
+      password: "aman123",
+      role: "citizen",
+      isVerified: true,
+    });
+    console.log("Citizen seeded: amanmathssogani@gmail.com / aman123");
+  }
+
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
@@ -53,3 +89,7 @@ startServer().catch((err) => {
   console.error("Server failed to start:", err.message);
   process.exit(1);
 });
+
+
+
+
