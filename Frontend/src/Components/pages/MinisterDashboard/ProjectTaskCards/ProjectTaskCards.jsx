@@ -1,6 +1,6 @@
 import React from 'react';
 import { AreaChart, Area, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Briefcase, CheckCircle2, Clock, Users, UserCheck, UserX, Layers } from 'lucide-react';
+import { Briefcase, CheckCircle2, Clock, Users, UserCheck, UserX, Layers, Building2 } from 'lucide-react';
 import { GrCurrency } from "react-icons/gr";
 import { staticProjects, staticTasks, staticEmployees } from '../staticData';
 
@@ -72,7 +72,7 @@ function ProjectTaskCards({stats}) {
     label: "Departments",
     val: stats?.departments || 0,
     color: "#8b5cf6",
-    icon: <Layers />,
+    icon: <Building2 />,
     type: "sparkline"
   },
   {

@@ -3,7 +3,7 @@ import {
     PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend
 } from 'recharts';
 import {
-    Briefcase, CheckCircle2, XCircle, AlertCircle
+    Briefcase, CheckCircle2, XCircle, Building2
 } from 'lucide-react';
 import { staticProjects, staticTasks } from '../staticData';
 
@@ -34,12 +34,16 @@ const processDistribution = (data, key) => {
 // Static data processed once
 const projectData  = processDistribution(staticProjects, 'status');
 const taskData     = processDistribution(staticTasks,    'status');
-const priorityData = processDistribution(staticTasks,    'priority');
 
-function PieCharts() {
+function PieCharts({ departments = [] }) {
     const [projectFilter,  setProjectFilter]  = useState(null);
     const [taskFilter,     setTaskFilter]     = useState(null);
-    const [priorityFilter, setPriorityFilter] = useState(null);
+    const [departmentFilter, setDepartmentFilter] = useState(null);
+
+    const departmentData = departments.map((d) => ({
+        name: d.name || "Unknown",
+        value: d.totalCases || 0,
+    }));
 
     return (
         <div className="w-full bg-white text-slate-900">
@@ -61,12 +65,12 @@ function PieCharts() {
                     setFilter={setTaskFilter}
                 />
                 <ChartCard
-                    title="Task Priority"
-                    icon={<AlertCircle size={18} className="text-amber-500" />}
-                    data={priorityData}
+                    title="Department Case Load"
+                    icon={<Building2 size={18} className="text-violet-500" />}
+                    data={departmentData}
                     colors={COLORS}
-                    activeFilter={priorityFilter}
-                    setFilter={setPriorityFilter}
+                    activeFilter={departmentFilter}
+                    setFilter={setDepartmentFilter}
                 />
             </div>
         </div>

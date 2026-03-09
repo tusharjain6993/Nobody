@@ -6,8 +6,8 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import authRoutes from "./routes/auth.js";
 import caseRoutes from "./routes/cases.js";
 import employeeRoutes from "./routes/employees.js";
+import departmentRoutes from "./routes/departments.js";
 import User from "./models/User.js";
-import departmentRoutes from "./routes/departmentRoutes.js";
 dotenv.config();
 
 const app = express();

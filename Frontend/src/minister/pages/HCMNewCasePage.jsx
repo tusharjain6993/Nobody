@@ -1,15 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import { useHCMAuth } from "../HCMAuthContext";
-import { casesApi } from "../ministerApi";
+import { casesApi, departmentApi } from "../ministerApi";
 import { Link } from "react-router-dom";
-
-const REQUEST_CATEGORIES = [
-  { id: "PUB_WELFARE", name: "Public Welfare" },
-  { id: "COMPLAINT", name: "Complaint" },
-  { id: "REQUEST", name: "Request" },
-  { id: "GRIEVANCE", name: "Grievance" },
-];
 
 const INDIA_LOCATION_MINISTERS = {
   Rajasthan: {
@@ -56,6 +49,25 @@ export default function HCMNewCasePage() {
   const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
   const [pinLoading, setPinLoading] = useState(false);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadDepartments() {
+      try {
+        const res = await departmentApi.options();
+        if (!mounted) return;
+        setDepartmentOptions(res.departments || []);
+      } catch (err) {
+        if (!mounted) return;
+        setErrors((prev) => ({ ...prev, category: err.message || "Failed to load categories" }));
+      }
+    }
+    loadDepartments();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const availableCities = useMemo(() => {
     if (!form.state || !INDIA_LOCATION_MINISTERS[form.state]) return [];
@@ -270,11 +282,14 @@ export default function HCMNewCasePage() {
                   setForm({ ...form, category: e.target.value });
                   if (errors.category) setErrors({ ...errors, category: null });
                 }}
+                disabled={departmentOptions.length === 0}
                 style={{ ...(errors.category ? errorInputStyle : inputStyle), cursor: "pointer" }}
               >
-                <option value="" disabled>Select category</option>
-                {REQUEST_CATEGORIES.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                <option value="" disabled>
+                  {departmentOptions.length === 0 ? "No departments available" : "Select category"}
+                </option>
+                {departmentOptions.map((d) => (
+                  <option key={d.id} value={d.name}>{d.name}</option>
                 ))}
               </select>
               {errors.category && (

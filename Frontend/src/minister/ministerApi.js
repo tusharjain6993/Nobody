@@ -65,6 +65,8 @@ export const casesApi = {
 
 export const departmentApi = {
   overview: () => request("GET", "/departments/overview", null, getToken()),
+  create: (body) => request("POST", "/departments", body, getToken()),
+  options: () => request("GET", "/departments/options", null, getToken()),
 };
 
 // ─── Assignments ──────────────────────────────────────────────────────────

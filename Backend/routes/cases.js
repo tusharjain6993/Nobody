@@ -116,36 +116,4 @@ router.get("/dashboard/stats", requireAuth, requireRole("admin"), async (req, re
   }
 });
 
-router.get("/departments/overview", requireAuth, requireRole("admin"), async (req, res) => {
-  try {
-    const grouped = await Case.aggregate([
-      {
-        $group: {
-          _id: { state: "$state", districtCity: "$districtCity" },
-          totalCases: { $sum: 1 },
-          submitted: {
-            $sum: {
-              $cond: [{ $eq: ["$status", "SUBMITTED"] }, 1, 0],
-            },
-          },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          state: "$_id.state",
-          districtCity: "$_id.districtCity",
-          totalCases: 1,
-          submitted: 1,
-        },
-      },
-      { $sort: { totalCases: -1 } },
-    ]);
-
-    return res.json({ departments: grouped });
-  } catch {
-    return res.status(500).json({ message: "Failed to load department overview" });
-  }
-});
-
 export default router;
