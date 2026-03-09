@@ -26,24 +26,70 @@ const staticData = {
     employees: { total: staticEmployees.length,  active: activeEmp,            inactive: inactiveEmp   },
 };
 
-function ProjectTaskCards() {
-  const cards = [
-    { label: 'Total Projects',   val: staticData.projects.total,     color: '#3b82f6', icon: <Briefcase />,    type: 'sparkline' },
-    { label: 'Pending Proj.',    val: staticData.projects.pending,    color: '#f59e0b', icon: <Clock />,        type: 'radial',  total: staticData.projects.total },
-    { label: 'Completed Proj.',  val: staticData.projects.completed,  color: '#10b981', icon: <CheckCircle2 />, type: 'radial',  total: staticData.projects.total },
-    {
-        label: 'Workforce',
-        val: staticData.employees.total,
-        color: '#8b5cf6',
-        icon: <Users />,
-        type: 'multi-employee',
-        details: { active: staticData.employees.active, inactive: staticData.employees.inactive }
-    },
-    { label: 'Total Tasks',      val: staticData.tasks.total,        color: '#10b981', icon: <Layers />,       type: 'sparkline' },
-    { label: 'Pending Tasks',    val: staticData.tasks.pending,      color: '#f97316', icon: <Clock />,        type: 'radial',  total: staticData.tasks.total },
-    { label: 'Completed Tasks',  val: staticData.tasks.completed,    color: '#059669', icon: <CheckCircle2 />, type: 'radial',  total: staticData.tasks.total },
-    { label: 'Earnings',         val: 0,                             color: '#059669', icon: <GrCurrency />,   type: 'radial',  total: 0 },
-  ];
+function ProjectTaskCards({stats}) {
+ const cards = [
+  {
+    label: "Total Cases",
+    val: stats?.totalCases || 0,
+    color: "#3b82f6",
+    icon: <Briefcase />,
+    type: "radial",
+    total: stats?.totalCases || 0
+  },
+  {
+    label: "Submitted",
+    val: stats?.submitted || 0,
+    color: "#f59e0b",
+    icon: <Clock />,
+    type: "radial",
+    total: stats?.totalCases || 0
+  },
+  {
+    label: "In Review",
+    val: stats?.inReview || 0,
+    color: "#6366f1",
+    icon: <Layers />,
+    type: "radial",
+    total: stats?.totalCases || 0
+  },
+  {
+    label: "Resolved",
+    val: stats?.resolved || 0,
+    color: "#10b981",
+    icon: <CheckCircle2 />,
+    type: "radial",
+    total: stats?.totalCases || 0
+  },
+  {
+    label: "Rejected",
+    val: stats?.rejected || 0,
+    color: "#ef4444",
+    icon: <UserX />,
+    type: "radial",
+    total: stats?.totalCases || 0
+  },
+  {
+    label: "Departments",
+    val: stats?.departments || 0,
+    color: "#8b5cf6",
+    icon: <Layers />,
+    type: "sparkline"
+  },
+  {
+    label: "Meet With Minister / PS Solution",
+    val: (stats?.directMeet || 0) + (stats?.psSolution || 0),
+    color: "#f97316",
+    icon: <UserCheck />,
+    type: "sparkline"
+  },
+  {
+    label: "Total Employees",
+    val: stats?.totalEmployees || 0,
+    color: "#14b8a6",
+    icon: <Users />,
+    type: "sparkline"
+  }
+];
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

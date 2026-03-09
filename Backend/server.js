@@ -7,7 +7,7 @@ import authRoutes from "./routes/auth.js";
 import caseRoutes from "./routes/cases.js";
 import employeeRoutes from "./routes/employees.js";
 import User from "./models/User.js";
-
+import departmentRoutes from "./routes/departmentRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -19,7 +19,7 @@ app.use(express.json());
 app.use("/api/v1", authRoutes);
 app.use("/api/v1", caseRoutes);
 app.use("/api/v1", employeeRoutes);
-
+app.use("/api/v1", departmentRoutes);
 app.get("/", (req, res) => {
   res.json({ status: "HCM Backend running" });
 });
