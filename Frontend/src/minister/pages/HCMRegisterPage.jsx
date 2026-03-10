@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { CheckCircle, AlertCircle, User, Mail, Phone, FileText } from "lucide-react";
-
-const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+import { CheckmarkCircleRegular, ErrorCircleRegular, PersonRegular, MailRegular } from "@fluentui/react-icons";
+import { authApi } from "../ministerApi";
+import "./authPages.css";
 
 const GENDERS = [
   { id: "MALE", name: "Male" },
@@ -18,6 +18,7 @@ export default function HCMRegisterPage() {
   const [errors, setErrors] = useState({});
   const [otpValue, setOtpValue] = useState("");
   const [registeredEmail, setRegisteredEmail] = useState("");
+  const [citizenId, setCitizenId] = useState("");
 
   const [form, setForm] = useState({
     name: "",
@@ -34,9 +35,9 @@ export default function HCMRegisterPage() {
     const e = {};
     if (!form.name.trim()) e.name = "Full name is required";
     if (!form.email.trim()) e.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Invalid email format";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Please enter a valid email address";
     if (!form.phone.trim()) e.phone = "Phone number is required";
-    else if (!/^[6-9]\d{9}$/.test(form.phone.replace(/\D/g, ""))) e.phone = "Enter a valid 10-digit number";
+    else if (!/^[6-9]\d{9}$/.test(form.phone.replace(/\D/g, ""))) e.phone = "Phone must be exactly 10 digits (start with 6–9)";
     if (!form.age || form.age < 18 || form.age > 120) e.age = "Age must be between 18-120";
     const rawAadhaar = form.aadhaar.replace(/\s/g, "");
     if (!rawAadhaar) e.aadhaar = "Aadhaar number is required";
@@ -54,23 +55,21 @@ export default function HCMRegisterPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API}/api/v1/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          gender: form.gender,
-          age: Number(form.age),
-          aadhaar: form.aadhaar.replace(/\s/g, ""),
-          password: form.password,
-        }),
+      const data = await authApi.register({
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        gender: form.gender,
+        age: Number(form.age),
+        aadhaar: form.aadhaar.replace(/\s/g, ""),
+        password: form.password,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Registration failed");
       setRegisteredEmail((data.email || form.email).trim().toLowerCase());
-      if (data.devOtp) setOtpValue(data.devOtp);
+      if (data.devOtp) {
+        setOtpValue(data.devOtp);
+        // Show OTP in a JS popup for easy copying in demo mode
+        alert(`Your one-time password (OTP) is: ${data.devOtp}`);
+      }
       setStep(2);
     } catch (err) {
       setError(err.message);
@@ -88,13 +87,10 @@ export default function HCMRegisterPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API}/api/v1/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: registeredEmail, otp: otpValue }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Verification failed");
+      const res = await authApi.verifyOtp(registeredEmail, otpValue);
+      if (res?.citizenUniqueId) {
+        setCitizenId(res.citizenUniqueId);
+      }
       setStep(3);
     } catch (err) {
       setError(err.message);
@@ -107,13 +103,7 @@ export default function HCMRegisterPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API}/api/v1/resend-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: registeredEmail }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Resend failed");
+      await authApi.resendOtp(registeredEmail);
       setError("");
       alert("New OTP sent to your email!");
     } catch (err) {
@@ -123,70 +113,57 @@ export default function HCMRegisterPage() {
     }
   };
 
-  const fieldStyle = {
-    width: "100%", padding: "0.75rem 1rem",
-    background: "rgba(255,255,255,0.07)",
-    border: "1px solid rgba(255,255,255,0.15)",
-    borderRadius: "10px", color: "#f1f5f9",
-    fontSize: "0.9rem", outline: "none",
-    boxSizing: "border-box",
-    transition: "border-color 0.2s",
-  };
-
-  const errorFieldStyle = {
-    ...fieldStyle,
-    borderColor: "rgba(239,68,68,0.5)",
-    background: "rgba(239,68,68,0.05)",
-  };
-
-  const labelStyle = {
-    display: "block", fontSize: "0.75rem", fontWeight: "600",
-    color: "#cbd5e1", marginBottom: "0.4rem", letterSpacing: "0.05em",
-  };
-
   // ── Success Screen ──
   if (step === 3) {
     return (
-      <div style={{
-        minHeight: "100vh",
-        background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f2744 100%)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontFamily: "'Inter', 'Segoe UI', sans-serif", padding: "1rem",
-      }}>
-        <div style={{
-          width: "100%", maxWidth: "440px",
-          background: "rgba(255,255,255,0.05)",
-          backdropFilter: "blur(20px)",
-          border: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: "20px", padding: "2.5rem",
-          boxShadow: "0 25px 50px rgba(0,0,0,0.4)",
-          textAlign: "center",
-        }}>
-          <div style={{
-            width: "80px", height: "80px",
-            background: "rgba(34,197,94,0.15)",
-            borderRadius: "50%",
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            marginBottom: "1.5rem",
-          }}>
-            <CheckCircle size={40} color="#22c55e" />
+      <div className="auth-page">
+        <div className="auth-card auth-card--success">
+          <div className="auth-logo auth-logo--success">
+            <CheckmarkCircleRegular style={{ fontSize: 40, color: "#22c55e" }} />
           </div>
-          <h2 style={{ fontSize: "1.5rem", fontWeight: "700", color: "#f1f5f9", margin: "0 0 0.5rem" }}>
+          <h2 className="auth-title" style={{ margin: "0 0 0.5rem" }}>
             Registration Successful!
           </h2>
-          <p style={{ color: "#94a3b8", fontSize: "0.9rem", margin: "0 0 2rem" }}>
-            Your account has been verified and created. You can now login with your credentials.
-          </p>
-          <button
-            onClick={() => navigate("/login")}
-            style={{
-              width: "100%", padding: "0.85rem",
-              background: "linear-gradient(135deg, #22c55e, #16a34a)",
-              border: "none", borderRadius: "10px",
-              color: "#fff", fontWeight: "700", fontSize: "1rem",
-              cursor: "pointer", boxShadow: "0 4px 15px rgba(34,197,94,0.4)",
-            }}
-          >
+          {citizenId ? (
+            <>
+              <p className="auth-subtitle" style={{ margin: "0 0 0.75rem" }}>
+                Your account has been verified and created.
+              </p>
+              <div
+                style={{
+                  padding: "0.85rem 1rem",
+                  borderRadius: "12px",
+                  background: "rgba(37,99,235,0.12)",
+                  border: "1px solid rgba(37,99,235,0.4)",
+                  marginBottom: "1.25rem",
+                  fontSize: "0.9rem",
+                  color: "#e5efff",
+                }}
+              >
+                <div style={{ fontSize: "0.8rem", opacity: 0.9, marginBottom: "0.25rem" }}>
+                  Your Citizen ID (use this to log in):
+                </div>
+                <div
+                  style={{
+                    fontFamily: "monospace",
+                    fontWeight: 800,
+                    letterSpacing: "0.08em",
+                    fontSize: "1rem",
+                  }}
+                >
+                  {citizenId}
+                </div>
+              </div>
+              <p className="auth-subtitle" style={{ margin: "0 0 1.25rem" }}>
+                Please save this ID. On the login screen, choose <strong>Citizen</strong> and enter this ID to access your portal.
+              </p>
+            </>
+          ) : (
+            <p className="auth-subtitle" style={{ margin: "0 0 2rem" }}>
+              Your account has been verified and created. You can now login with your credentials.
+            </p>
+          )}
+          <button type="button" onClick={() => navigate("/login")} className="auth-btn auth-btn--success">
             Go to Login →
           </button>
         </div>
@@ -197,96 +174,51 @@ export default function HCMRegisterPage() {
   // ── OTP Verification Screen ──
   if (step === 2) {
     return (
-      <div style={{
-        minHeight: "100vh",
-        background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f2744 100%)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontFamily: "'Inter', 'Segoe UI', sans-serif", padding: "1rem",
-      }}>
-        <div style={{
-          width: "100%", maxWidth: "420px",
-          background: "rgba(255,255,255,0.05)",
-          backdropFilter: "blur(20px)",
-          border: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: "20px", padding: "2.5rem",
-          boxShadow: "0 25px 50px rgba(0,0,0,0.4)",
-        }}>
-          <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-            <div style={{
-              width: "60px", height: "60px",
-              background: "linear-gradient(135deg, #f59e0b, #d97706)",
-              borderRadius: "16px",
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              marginBottom: "1rem",
-              boxShadow: "0 8px 20px rgba(245,158,11,0.4)",
-            }}>
-              <Mail size={28} color="#fff" />
+      <div className="auth-page">
+        <div className="auth-card">
+          <div className="auth-header">
+            <div className="auth-logo auth-logo--otp">
+              <MailRegular style={{ fontSize: 28, color: "#fff" }} />
             </div>
-            <h2 style={{ fontSize: "1.35rem", fontWeight: "700", color: "#f1f5f9", margin: "0 0 0.25rem" }}>
+            <h2 className="auth-title" style={{ fontSize: "1.35rem" }}>
               Verify Your Email
             </h2>
-            <p style={{ fontSize: "0.85rem", color: "#94a3b8", margin: 0 }}>
+            <p className="auth-subtitle" style={{ fontSize: "0.85rem" }}>
               We sent a 6-digit OTP to <strong style={{ color: "#93c5fd" }}>{registeredEmail}</strong>
             </p>
           </div>
 
           {error && (
-            <div style={{
-              background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)",
-              color: "#fca5a5", borderRadius: "8px", padding: "0.75rem 1rem",
-              fontSize: "0.85rem", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem",
-            }}>
-              <AlertCircle size={16} /> {error}
+            <div className="auth-error" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <ErrorCircleRegular style={{ fontSize: 16 }} /> {error}
             </div>
           )}
 
           <form onSubmit={handleVerifyOtp}>
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label style={labelStyle}>ENTER OTP</label>
+            <div className="auth-field-group" style={{ marginBottom: "1.5rem" }}>
+              <label className="auth-label">ENTER OTP</label>
               <input
                 type="text"
                 maxLength={6}
                 value={otpValue}
                 onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, ""))}
                 placeholder="000000"
-                style={{
-                  ...fieldStyle,
-                  textAlign: "center",
-                  fontSize: "1.75rem",
-                  fontWeight: "700",
-                  letterSpacing: "0.75rem",
-                  paddingLeft: "1.5rem",
-                }}
-                onFocus={(e) => e.target.style.borderColor = "#f59e0b"}
-                onBlur={(e) => e.target.style.borderColor = "rgba(255,255,255,0.15)"}
+                className="auth-input auth-input--otp"
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                width: "100%", padding: "0.85rem",
-                background: loading ? "rgba(245,158,11,0.5)" : "linear-gradient(135deg, #f59e0b, #d97706)",
-                border: "none", borderRadius: "10px",
-                color: "#fff", fontWeight: "700", fontSize: "1rem",
-                cursor: loading ? "not-allowed" : "pointer",
-                boxShadow: "0 4px 15px rgba(245,158,11,0.4)",
-              }}
-            >
+            <button type="submit" disabled={loading} className="auth-btn auth-btn--otp">
               {loading ? "Verifying…" : "Verify OTP →"}
             </button>
           </form>
 
           <div style={{ textAlign: "center", marginTop: "1.25rem" }}>
             <button
+              type="button"
               onClick={handleResendOtp}
               disabled={loading}
-              style={{
-                background: "none", border: "none",
-                color: "#93c5fd", fontSize: "0.85rem",
-                cursor: "pointer", textDecoration: "underline",
-              }}
+              className="auth-link"
+              style={{ background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontSize: "0.85rem" }}
             >
               Didn't receive? Resend OTP
             </button>
@@ -309,88 +241,59 @@ export default function HCMRegisterPage() {
   }
 
   // ── Registration Form ──
-  return (
-    <div style={{
-      minHeight: "100vh",
-      background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f2744 100%)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontFamily: "'Inter', 'Segoe UI', sans-serif", padding: "1rem",
-    }}>
-      <div style={{
-        position: "fixed", top: "-10%", right: "-10%",
-        width: "500px", height: "500px",
-        background: "radial-gradient(circle, rgba(34,197,94,0.12) 0%, transparent 70%)",
-        pointerEvents: "none",
-      }} />
+  const inputClass = (field) =>
+    `auth-input ${errors[field] ? "auth-input--error" : ""}`.trim();
 
-      <div style={{
-        width: "100%", maxWidth: "500px",
-        background: "rgba(255,255,255,0.05)",
-        backdropFilter: "blur(20px)",
-        border: "1px solid rgba(255,255,255,0.12)",
-        borderRadius: "20px", padding: "2rem 2.5rem",
-        boxShadow: "0 25px 50px rgba(0,0,0,0.4)",
-        maxHeight: "95vh", overflowY: "auto",
-      }}>
-        <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-          <div style={{
-            width: "60px", height: "60px",
-            background: "linear-gradient(135deg, #22c55e, #16a34a)",
-            borderRadius: "16px",
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            marginBottom: "0.75rem",
-            boxShadow: "0 8px 20px rgba(34,197,94,0.4)",
-          }}>
-            <User size={28} color="#fff" />
+  return (
+    <div className="auth-page">
+      <div className="auth-page__blur1" aria-hidden="true" style={{ background: "radial-gradient(circle, rgba(34,197,94,0.12) 0%, transparent 70%)" }} />
+
+      <div className="auth-card auth-card--wide" style={{ maxHeight: "95vh", overflowY: "auto" }}>
+        <div className="auth-header" style={{ marginBottom: "1.5rem" }}>
+          <div className="auth-logo auth-logo--register">
+            <PersonRegular style={{ fontSize: 28, color: "#fff" }} />
           </div>
-          <h1 style={{ fontSize: "1.35rem", fontWeight: "700", color: "#f1f5f9", margin: "0 0 0.2rem" }}>
+          <h1 className="auth-title" style={{ fontSize: "1.35rem", margin: "0 0 0.2rem" }}>
             Citizen Registration
           </h1>
-          <p style={{ fontSize: "0.85rem", color: "#94a3b8", margin: 0 }}>
+          <p className="auth-subtitle" style={{ fontSize: "0.85rem" }}>
             Create your account to access HCM Portal
           </p>
         </div>
 
         {error && (
-          <div style={{
-            background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)",
-            color: "#fca5a5", borderRadius: "8px", padding: "0.75rem 1rem",
-            fontSize: "0.85rem", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem",
-          }}>
-            <AlertCircle size={16} /> {error}
+          <div className="auth-error" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <ErrorCircleRegular style={{ fontSize: 16 }} /> {error}
           </div>
         )}
 
         <form onSubmit={handleRegister}>
-          {/* Name */}
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={labelStyle}>FULL NAME</label>
+          <div className="auth-field-group" style={{ marginBottom: "1rem" }}>
+            <label className="auth-label">FULL NAME</label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => { setForm({ ...form, name: e.target.value }); setErrors({ ...errors, name: null }); }}
               placeholder="Enter your full name"
-              style={errors.name ? errorFieldStyle : fieldStyle}
+              className={inputClass("name")}
             />
-            {errors.name && <p style={{ color: "#fca5a5", fontSize: "0.78rem", margin: "0.3rem 0 0" }}>{errors.name}</p>}
+            {errors.name && <p className="auth-error" style={{ marginTop: "0.3rem", padding: "0.25rem 0", fontSize: "0.78rem" }}>{errors.name}</p>}
           </div>
 
-          {/* Email */}
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={labelStyle}>EMAIL ADDRESS</label>
+          <div className="auth-field-group" style={{ marginBottom: "1rem" }}>
+            <label className="auth-label">EMAIL ADDRESS</label>
             <input
               type="email"
               value={form.email}
               onChange={(e) => { setForm({ ...form, email: e.target.value }); setErrors({ ...errors, email: null }); }}
               placeholder="you@example.com"
-              style={errors.email ? errorFieldStyle : fieldStyle}
+              className={inputClass("email")}
             />
-            {errors.email && <p style={{ color: "#fca5a5", fontSize: "0.78rem", margin: "0.3rem 0 0" }}>{errors.email}</p>}
+            {errors.email && <p className="auth-error" style={{ marginTop: "0.3rem", padding: "0.25rem 0", fontSize: "0.78rem" }}>{errors.email}</p>}
           </div>
 
-          {/* Phone */}
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={labelStyle}>PHONE NUMBER</label>
+          <div className="auth-field-group" style={{ marginBottom: "1rem" }}>
+            <label className="auth-label">PHONE NUMBER</label>
             <input
               type="tel"
               value={form.phone}
@@ -402,31 +305,32 @@ export default function HCMRegisterPage() {
               }}
               placeholder="9876543210"
               maxLength={10}
-              style={errors.phone ? errorFieldStyle : fieldStyle}
+              className={inputClass("phone")}
             />
-            {errors.phone && <p style={{ color: "#fca5a5", fontSize: "0.78rem", margin: "0.3rem 0 0" }}>{errors.phone}</p>}
+            {errors.phone && <p className="auth-error" style={{ marginTop: "0.3rem", padding: "0.25rem 0", fontSize: "0.78rem" }}>{errors.phone}</p>}
           </div>
 
-          {/* Age & Gender Row */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
             <div>
-              <label style={labelStyle}>AGE</label>
+              <label className="auth-label">AGE</label>
               <input
                 type="number"
                 value={form.age}
                 onChange={(e) => { setForm({ ...form, age: e.target.value }); setErrors({ ...errors, age: null }); }}
                 placeholder="25"
-                min={18} max={120}
-                style={errors.age ? errorFieldStyle : fieldStyle}
+                min={18}
+                max={120}
+                className={inputClass("age")}
               />
-              {errors.age && <p style={{ color: "#fca5a5", fontSize: "0.78rem", margin: "0.3rem 0 0" }}>{errors.age}</p>}
+              {errors.age && <p className="auth-error" style={{ marginTop: "0.3rem", padding: "0.25rem 0", fontSize: "0.78rem" }}>{errors.age}</p>}
             </div>
             <div>
-              <label style={labelStyle}>GENDER</label>
+              <label className="auth-label">GENDER</label>
               <select
                 value={form.gender}
                 onChange={(e) => setForm({ ...form, gender: e.target.value })}
-                style={{ ...fieldStyle, cursor: "pointer" }}
+                className="auth-input"
+                style={{ cursor: "pointer" }}
               >
                 {GENDERS.map((g) => (
                   <option key={g.id} value={g.id} style={{ color: "#1e293b" }}>{g.name}</option>
@@ -435,74 +339,57 @@ export default function HCMRegisterPage() {
             </div>
           </div>
 
-          {/* Aadhaar */}
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={labelStyle}>AADHAAR CARD NUMBER</label>
+          <div className="auth-field-group" style={{ marginBottom: "1rem" }}>
+            <label className="auth-label">AADHAAR CARD NUMBER</label>
             <input
               type="text"
               value={form.aadhaar}
               onChange={(e) => {
                 let v = e.target.value.replace(/\D/g, "");
                 if (v.length > 12) v = v.slice(0, 12);
-                let formatted = v.replace(/(\d{4})(?=\d)/g, "$1 ");
+                const formatted = v.replace(/(\d{4})(?=\d)/g, "$1 ");
                 setForm({ ...form, aadhaar: formatted });
                 setErrors({ ...errors, aadhaar: null });
               }}
               placeholder="XXXX XXXX XXXX"
               maxLength={14}
-              style={errors.aadhaar ? errorFieldStyle : fieldStyle}
+              className={inputClass("aadhaar")}
             />
-            {errors.aadhaar && <p style={{ color: "#fca5a5", fontSize: "0.78rem", margin: "0.3rem 0 0" }}>{errors.aadhaar}</p>}
+            {errors.aadhaar && <p className="auth-error" style={{ marginTop: "0.3rem", padding: "0.25rem 0", fontSize: "0.78rem" }}>{errors.aadhaar}</p>}
           </div>
 
-          {/* Password */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
             <div>
-              <label style={labelStyle}>PASSWORD</label>
+              <label className="auth-label">PASSWORD</label>
               <input
                 type="password"
                 value={form.password}
                 onChange={(e) => { setForm({ ...form, password: e.target.value }); setErrors({ ...errors, password: null }); }}
                 placeholder="••••••••"
-                style={errors.password ? errorFieldStyle : fieldStyle}
+                className={inputClass("password")}
               />
-              {errors.password && <p style={{ color: "#fca5a5", fontSize: "0.78rem", margin: "0.3rem 0 0" }}>{errors.password}</p>}
+              {errors.password && <p className="auth-error" style={{ marginTop: "0.3rem", padding: "0.25rem 0", fontSize: "0.78rem" }}>{errors.password}</p>}
             </div>
             <div>
-              <label style={labelStyle}>CONFIRM PASSWORD</label>
+              <label className="auth-label">CONFIRM PASSWORD</label>
               <input
                 type="password"
                 value={form.confirmPassword}
                 onChange={(e) => { setForm({ ...form, confirmPassword: e.target.value }); setErrors({ ...errors, confirmPassword: null }); }}
                 placeholder="••••••••"
-                style={errors.confirmPassword ? errorFieldStyle : fieldStyle}
+                className={inputClass("confirmPassword")}
               />
-              {errors.confirmPassword && <p style={{ color: "#fca5a5", fontSize: "0.78rem", margin: "0.3rem 0 0" }}>{errors.confirmPassword}</p>}
+              {errors.confirmPassword && <p className="auth-error" style={{ marginTop: "0.3rem", padding: "0.25rem 0", fontSize: "0.78rem" }}>{errors.confirmPassword}</p>}
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: "100%", padding: "0.85rem",
-              background: loading ? "rgba(34,197,94,0.5)" : "linear-gradient(135deg, #22c55e, #16a34a)",
-              border: "none", borderRadius: "10px",
-              color: "#fff", fontWeight: "700", fontSize: "1rem",
-              cursor: loading ? "not-allowed" : "pointer",
-              boxShadow: "0 4px 15px rgba(34,197,94,0.4)",
-              transition: "all 0.2s",
-            }}
-          >
+          <button type="submit" disabled={loading} className="auth-btn auth-btn--register">
             {loading ? "Registering…" : "Register & Send OTP →"}
           </button>
         </form>
 
-        <div style={{ textAlign: "center", marginTop: "1.25rem", fontSize: "0.875rem", color: "#94a3b8" }}>
-          Already have an account?{" "}
-          <Link to="/login" style={{ color: "#93c5fd", fontWeight: "600", textDecoration: "none" }}>
-            Sign in
-          </Link>
+        <div className="auth-footer" style={{ marginTop: "1.25rem" }}>
+          Already have an account? <Link to="/login" className="auth-link">Sign in</Link>
         </div>
       </div>
     </div>

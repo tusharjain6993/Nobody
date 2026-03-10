@@ -26,3 +26,13 @@ export function requireRole(...allowedRoles) {
     next();
   };
 }
+
+/** Admin-side roles: PS, APS, Additional PS, Staff, Admin. Use for office review/schedule/complete. */
+const STAFF_ROLES = ["admin", "ps", "aps", "additional_ps", "staff", "official"];
+
+export function requireStaffRole(req, res, next) {
+  if (!req.user || !STAFF_ROLES.includes(req.user.role)) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+  next();
+}

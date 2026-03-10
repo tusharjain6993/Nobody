@@ -1,1 +1,220 @@
 @import "tailwindcss";
+
+body {
+  font-family: "Lora", serif;
+  font-size: 14px;
+}
+
+/* ── 3D Shadow system ──────────────────────────────────────────── */
+.shadow-3d-sm {
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.06),
+    0 2px 4px rgba(0,0,0,0.04),
+    0 0 0 1px rgba(0,0,0,0.02);
+}
+.shadow-3d {
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.04),
+    0 4px 12px rgba(0,0,0,0.06),
+    0 8px 24px rgba(0,0,0,0.04);
+}
+.shadow-3d-md {
+  box-shadow:
+    0 4px 6px rgba(0,0,0,0.04),
+    0 8px 20px rgba(0,0,0,0.06),
+    0 16px 40px rgba(0,0,0,0.04);
+}
+.shadow-3d-lg {
+  box-shadow:
+    0 4px 8px rgba(0,0,0,0.03),
+    0 12px 28px rgba(0,0,0,0.08),
+    0 24px 56px rgba(0,0,0,0.06);
+}
+.shadow-3d-hover {
+  box-shadow:
+    0 6px 12px rgba(0,0,0,0.05),
+    0 16px 36px rgba(0,0,0,0.08),
+    0 24px 64px rgba(0,0,0,0.05);
+  transform: translateY(-1px);
+}
+.dark .shadow-3d-sm {
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.2),
+    0 2px 6px rgba(0,0,0,0.15),
+    0 0 0 1px rgba(255,255,255,0.03);
+}
+.dark .shadow-3d {
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.2),
+    0 6px 16px rgba(0,0,0,0.2),
+    0 12px 32px rgba(0,0,0,0.12);
+}
+.dark .shadow-3d-md {
+  box-shadow:
+    0 4px 8px rgba(0,0,0,0.25),
+    0 12px 28px rgba(0,0,0,0.2),
+    0 20px 48px rgba(0,0,0,0.15);
+}
+.dark .shadow-3d-lg {
+  box-shadow:
+    0 6px 12px rgba(0,0,0,0.3),
+    0 16px 36px rgba(0,0,0,0.25),
+    0 28px 64px rgba(0,0,0,0.2);
+}
+
+/* Raised pill/badge effect */
+.raised-pill {
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.08),
+    inset 0 1px 0 rgba(255,255,255,0.15);
+}
+
+/* Inset (pressed) effect */
+.inset-3d {
+  box-shadow:
+    inset 0 1px 3px rgba(0,0,0,0.08),
+    inset 0 0 0 1px rgba(0,0,0,0.03);
+}
+.dark .inset-3d {
+  box-shadow:
+    inset 0 1px 4px rgba(0,0,0,0.3),
+    inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+/* 3D button press effect */
+.btn-3d {
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.08),
+    0 4px 12px rgba(0,0,0,0.06),
+    inset 0 1px 0 rgba(255,255,255,0.12);
+  transition: all 0.15s ease;
+}
+.btn-3d:hover {
+  box-shadow:
+    0 4px 8px rgba(0,0,0,0.1),
+    0 8px 20px rgba(0,0,0,0.08),
+    inset 0 1px 0 rgba(255,255,255,0.15);
+  transform: translateY(-1px);
+}
+.btn-3d:active {
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.1),
+    inset 0 1px 3px rgba(0,0,0,0.1);
+  transform: translateY(0);
+}
+
+/* Class-based dark mode: add .dark to <html> to enable */
+@custom-variant dark (&:where(.dark, .dark *));
+
+.dark {
+  color-scheme: dark;
+}
+
+.dark body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+/* Global overrides so Tailwind dark: and inline-style pages work */
+.dark .bg-white {
+  background-color: #1e293b !important;
+}
+.dark .bg-gray-50 {
+  background-color: #0f172a !important;
+}
+.dark .text-slate-900,
+.dark .text-gray-900,
+.dark .text-slate-800,
+.dark .text-gray-800 {
+  color: #e2e8f0 !important;
+}
+.dark .text-slate-700,
+.dark .text-gray-700 {
+  color: #cbd5e1 !important;
+}
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-gray-500,
+.dark .text-slate-400,
+.dark .text-gray-400 {
+  color: #94a3b8 !important;
+}
+.dark .border-slate-200,
+.dark .border-gray-200 {
+  border-color: #334155 !important;
+}
+.dark .border-gray-300 {
+  border-color: #475569 !important;
+}
+.dark .bg-slate-50 {
+  background-color: #1e293b !important;
+}
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #334155 !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #94a3b8 !important;
+}
+.dark .shadow,
+.dark .shadow-sm,
+.dark .shadow-md,
+.dark .shadow-lg {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.dark a {
+  color: #93c5fd;
+}
+.dark a:hover {
+  color: #bfdbfe;
+}
+
+/* Settings page: cards and nav use inline styles; these classes force dark appearance */
+.settings-card,
+.dark .settings-card {
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+.settings-card {
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.04),
+    0 4px 12px rgba(0,0,0,0.06),
+    0 8px 24px rgba(0,0,0,0.04);
+}
+.dark .settings-card {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.2),
+    0 6px 16px rgba(0,0,0,0.2),
+    0 12px 32px rgba(0,0,0,0.12);
+}
+.settings-nav {
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.04),
+    0 4px 12px rgba(0,0,0,0.06),
+    0 8px 24px rgba(0,0,0,0.04);
+}
+.dark .settings-nav {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.2),
+    0 6px 16px rgba(0,0,0,0.2),
+    0 12px 32px rgba(0,0,0,0.12);
+}
+.dark .settings-page-title,
+.dark .settings-section-title {
+  color: #e2e8f0 !important;
+}
+.dark .settings-page .settings-muted {
+  color: #94a3b8 !important;
+}
+.dark .settings-page .settings-body-text {
+  color: #cbd5e1 !important;
+}

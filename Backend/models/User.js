@@ -10,7 +10,13 @@ const userSchema = new mongoose.Schema(
     age: { type: Number, required: true, min: 18, max: 120 },
     aadhaar: { type: String, required: true, unique: true, trim: true },
     password: { type: String, required: true },
-    role: { type: String, enum: ["admin", "citizen"], default: "citizen" },
+    // Citizen-only identifier used for ID-based login (no password)
+    citizenUniqueId: { type: String, unique: true, sparse: true, index: true },
+    role: {
+      type: String,
+      enum: ["citizen", "staff", "official", "ps", "aps", "additional_ps", "admin"],
+      default: "citizen",
+    },
     isVerified: { type: Boolean, default: false },
   },
   { timestamps: true }

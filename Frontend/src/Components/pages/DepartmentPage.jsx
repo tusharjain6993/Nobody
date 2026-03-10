@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { AddRegular, DismissRegular } from "@fluentui/react-icons";
 import { departmentApi } from "../../minister/ministerApi";
 
 // Add Department Modal Component
@@ -55,12 +55,12 @@ function AddDepartmentModal({ isOpen, onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-in slide-in-from-bottom-5 duration-500 border border-slate-100">
+      <div className="bg-white rounded-2xl shadow-3d-lg max-w-md w-full animate-in slide-in-from-bottom-5 duration-500 border border-slate-100/60">
         {/* Header */}
         <div className="px-6 py-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white rounded-lg shadow-sm border border-slate-200 flex items-center justify-center text-blue-600">
-              <Plus size={20} strokeWidth={2.5} />
+              <AddRegular style={{ fontSize: 20 }} />
             </div>
             <h2 className="text-xl font-bold text-slate-900">Add Department</h2>
           </div>
@@ -68,7 +68,7 @@ function AddDepartmentModal({ isOpen, onClose, onSuccess }) {
             onClick={onClose}
             className="p-2 hover:bg-slate-100 rounded-lg transition-all text-slate-600"
           >
-            <X size={20} />
+            <DismissRegular style={{ fontSize: 20 }} />
           </button>
         </div>
 
@@ -143,7 +143,7 @@ function AddDepartmentModal({ isOpen, onClose, onSuccess }) {
                 </>
               ) : (
                 <>
-                  <Plus size={18} />
+                  <AddRegular style={{ fontSize: 18 }} />
                   Add Department
                 </>
               )}
@@ -211,9 +211,9 @@ export default function DepartmentPage() {
           {/* Add Department Button */}
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all whitespace-nowrap flex-shrink-0"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold rounded-xl btn-3d whitespace-nowrap flex-shrink-0"
           >
-            <Plus size={20} strokeWidth={2.5} />
+            <AddRegular style={{ fontSize: 20 }} />
             Add Department
           </button>
         </div>
@@ -226,7 +226,7 @@ export default function DepartmentPage() {
         />
 
         {/* Table Container */}
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+        <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-3d">
           {loading ? (
             <div className="p-8 text-center">
               <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-3" />
@@ -244,7 +244,7 @@ export default function DepartmentPage() {
                 onClick={() => setIsModalOpen(true)}
                 className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-all inline-flex items-center gap-2"
               >
-                <Plus size={18} />
+                <AddRegular style={{ fontSize: 18 }} />
                 Add First Department
               </button>
             </div>

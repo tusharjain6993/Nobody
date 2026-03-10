@@ -15,8 +15,6 @@ export function HCMAuthProvider({ children }) {
   const login = (userData, tok) => {
     localStorage.setItem("hcm_user", JSON.stringify(userData));
     localStorage.setItem("hcm_token", tok);
-    localStorage.setItem("loggedInUser", JSON.stringify(userData));
-    localStorage.setItem("token", tok);
     setUser(userData);
     setToken(tok);
   };
@@ -24,8 +22,6 @@ export function HCMAuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem("hcm_user");
     localStorage.removeItem("hcm_token");
-    localStorage.removeItem("loggedInUser");
-    localStorage.removeItem("token");
     setUser(null);
     setToken(null);
   };

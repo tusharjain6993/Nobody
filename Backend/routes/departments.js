@@ -1,11 +1,32 @@
 import { Router } from "express";
 import Department from "../models/Department.js";
 import Case from "../models/Case.js";
-import { requireAuth, requireRole } from "../middleware/auth.js";
+import User from "../models/User.js";
+import { requireAuth, requireRole, requireStaffRole } from "../middleware/auth.js";
+import { escapeRegex } from "../utils/escapeRegex.js";
 
 const router = Router();
 
-router.post("/departments", requireAuth, requireRole("admin"), async (req, res) => {
+const CATEGORY_DEPARTMENT_MAP = {
+  "road": "Municipal Corporation",
+  "water": "Water Supply Department",
+  "electricity": "Electricity Board",
+  "pension": "Social Welfare",
+  "health": "Health Department",
+  "education": "Education Department",
+  "housing": "Housing Board",
+  "agriculture": "Agriculture Department",
+  "land": "Revenue Department",
+  "police": "Home Department",
+  "transport": "Transport Department",
+  "sanitation": "Municipal Corporation",
+  "tax": "Revenue Department",
+  "employment": "Labour Department",
+  "environment": "Environment Department",
+  "women": "Women & Child Development",
+};
+
+router.post("/departments", requireAuth, requireStaffRole, async (req, res) => {
   try {
     const name = String(req.body?.name || "").trim();
     const state = String(req.body?.state || "").trim();
@@ -16,9 +37,9 @@ router.post("/departments", requireAuth, requireRole("admin"), async (req, res) 
     }
 
     const exists = await Department.findOne({
-      name: { $regex: `^${name}$`, $options: "i" },
-      state: { $regex: `^${state}$`, $options: "i" },
-      ministerName: { $regex: `^${ministerName}$`, $options: "i" },
+      name: { $regex: `^${escapeRegex(name)}$`, $options: "i" },
+      state: { $regex: `^${escapeRegex(state)}$`, $options: "i" },
+      ministerName: { $regex: `^${escapeRegex(ministerName)}$`, $options: "i" },
     });
 
     if (exists) {
@@ -32,7 +53,7 @@ router.post("/departments", requireAuth, requireRole("admin"), async (req, res) 
   }
 });
 
-router.get("/departments/overview", requireAuth, requireRole("admin"), async (req, res) => {
+router.get("/departments/overview", requireAuth, requireStaffRole, async (req, res) => {
   try {
     const [departments, groupedCases] = await Promise.all([
       Department.find().sort({ createdAt: -1 }).lean(),
@@ -102,6 +123,40 @@ router.get("/departments/options", requireAuth, async (req, res) => {
     return res.json({ departments: options });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Failed to load department options" });
+  }
+});
+
+router.get("/authority/suggestions", requireAuth, requireStaffRole, async (req, res) => {
+  try {
+    const { category, state } = req.query;
+    const query = { role: "official" };
+
+    if (state) {
+      query.$or = [
+        { "state": { $regex: escapeRegex(String(state).trim()), $options: "i" } },
+      ];
+    }
+
+    let officials = await User.find(query).select("-password -aadhaar").limit(10).lean();
+
+    let suggestedDepartment = null;
+    if (category) {
+      const catLower = String(category).toLowerCase();
+      for (const [key, dept] of Object.entries(CATEGORY_DEPARTMENT_MAP)) {
+        if (catLower.includes(key)) {
+          suggestedDepartment = dept;
+          break;
+        }
+      }
+    }
+
+    return res.json({
+      officials,
+      suggestedDepartment,
+      categoryMap: CATEGORY_DEPARTMENT_MAP,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Failed to fetch authority suggestions" });
   }
 });
 

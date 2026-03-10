@@ -4,15 +4,20 @@ import { employeesApi } from "../../../../minister/ministerApi";
 const EmployeeList = () => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let mounted = true;
     async function load() {
       try {
+        setError("");
         const res = await employeesApi.list({ status: "active" });
         if (mounted) setEmployees(res.employees || []);
-      } catch {
-        if (mounted) setEmployees([]);
+      } catch (err) {
+        if (mounted) {
+          setEmployees([]);
+          setError(err.message || "Failed to load employees");
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -29,6 +34,10 @@ const EmployeeList = () => {
         <h3 className="text-lg font-bold text-slate-800">Employees</h3>
         <span className="text-xs text-slate-500">Live DB Data</span>
       </div>
+
+      {error && (
+        <div className="text-sm text-red-600 font-medium mb-2">{error}</div>
+      )}
 
       <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar pt-2">
         {loading ? (

@@ -3,9 +3,11 @@ import {
     PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend
 } from 'recharts';
 import {
-    Briefcase, CheckCircle2, XCircle, Building2
-} from 'lucide-react';
-import { staticProjects, staticTasks } from '../staticData';
+    BriefcaseRegular,
+    CheckmarkCircleRegular,
+    DismissCircleRegular,
+    BuildingRegular,
+} from "@fluentui/react-icons";
 
 const COLORS = {
     'Completed':   '#10b981',
@@ -22,19 +24,6 @@ const COLORS = {
     'Default':     '#e2e8f0',
 };
 
-const processDistribution = (data, key) => {
-    const map = {};
-    data.forEach(item => {
-        const val = item[key] || 'Unknown';
-        map[val] = (map[val] || 0) + 1;
-    });
-    return Object.keys(map).map(name => ({ name, value: map[name] }));
-};
-
-// Static data processed once
-const projectData  = processDistribution(staticProjects, 'status');
-const taskData     = processDistribution(staticTasks,    'status');
-
 function PieCharts({ departments = [] }) {
     const [projectFilter,  setProjectFilter]  = useState(null);
     const [taskFilter,     setTaskFilter]     = useState(null);
@@ -46,27 +35,27 @@ function PieCharts({ departments = [] }) {
     }));
 
     return (
-        <div className="w-full bg-white text-slate-900">
+        <div className="w-full bg-white dark:bg-transparent text-slate-900 dark:text-slate-100">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <ChartCard
                     title="Projects Status"
-                    icon={<Briefcase size={18} className="text-indigo-500" />}
-                    data={projectData}
+                    icon={<BriefcaseRegular style={{ fontSize: 18 }} className="text-indigo-500" />}
+                    data={[]}
                     colors={COLORS}
                     activeFilter={projectFilter}
                     setFilter={setProjectFilter}
                 />
                 <ChartCard
                     title="Tasks Status"
-                    icon={<CheckCircle2 size={18} className="text-emerald-500" />}
-                    data={taskData}
+                    icon={<CheckmarkCircleRegular style={{ fontSize: 18 }} className="text-emerald-500" />}
+                    data={[]}
                     colors={COLORS}
                     activeFilter={taskFilter}
                     setFilter={setTaskFilter}
                 />
                 <ChartCard
                     title="Department Case Load"
-                    icon={<Building2 size={18} className="text-violet-500" />}
+                    icon={<BuildingRegular style={{ fontSize: 18 }} className="text-violet-500" />}
                     data={departmentData}
                     colors={COLORS}
                     activeFilter={departmentFilter}
@@ -84,20 +73,20 @@ const ChartCard = ({ title, icon, data, colors, activeFilter, setFilter }) => {
     };
 
     return (
-        <div className="bg-white rounded-3xl p-4 border border-slate-100 shadow-sm flex flex-col h-full hover:shadow-md transition-shadow relative">
+        <div className="bg-white dark:bg-slate-800 rounded-3xl p-4 border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col h-full hover:shadow-md transition-shadow relative">
             <div className="flex justify-between items-start mb-1">
                 <div className="flex flex-col">
-                    <h3 className="text-lg font-black text-slate-800 tracking-tight">{title}</h3>
+                    <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 tracking-tight">{title}</h3>
                     {activeFilter && (
                         <button
                             onClick={() => setFilter(null)}
-                            className="flex items-center gap-1 text-[9px] font-bold text-indigo-500 uppercase mt-1 bg-indigo-50 px-2 py-0.5 rounded-full w-fit"
+                            className="flex items-center gap-1 text-[9px] font-bold text-indigo-500 uppercase mt-1 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full w-fit"
                         >
-                            <XCircle size={10} /> {activeFilter}
+                            <DismissCircleRegular style={{ fontSize: 10 }} /> {activeFilter}
                         </button>
                     )}
                 </div>
-                <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="p-2 bg-slate-50 dark:bg-slate-700 rounded-xl border border-slate-100 dark:border-slate-600">
                     {icon}
                 </div>
             </div>
@@ -138,7 +127,7 @@ const ChartCard = ({ title, icon, data, colors, activeFilter, setFilter }) => {
                             iconSize={8}
                             wrapperStyle={{ paddingTop: '10px' }}
                             formatter={(value) => (
-                                <span className={`text-[9px] font-bold uppercase ${activeFilter === value ? 'text-slate-900 underline' : 'text-slate-400'}`}>
+                                <span className={`text-[9px] font-bold uppercase ${activeFilter === value ? 'text-slate-900 dark:text-slate-100 underline' : 'text-slate-400'}`}>
                                     {value}
                                 </span>
                             )}
@@ -147,13 +136,13 @@ const ChartCard = ({ title, icon, data, colors, activeFilter, setFilter }) => {
                 </ResponsiveContainer>
 
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-12">
-                    <span className="text-2xl font-black text-slate-900 leading-none">
+                    <span className="text-2xl font-black text-slate-900 dark:text-slate-50 leading-none">
                         {activeFilter
                             ? (data.find(d => d.name === activeFilter)?.value || 0)
                             : data.reduce((acc, curr) => acc + curr.value, 0)
                         }
                     </span>
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                    <span className="text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
                         {activeFilter ? activeFilter : 'Total'}
                     </span>
                 </div>

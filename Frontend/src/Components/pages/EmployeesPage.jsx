@@ -95,7 +95,7 @@ export default function EmployeesPage() {
         </div>
         <button
           onClick={() => setShowAdd((v) => !v)}
-          className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700"
+          className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold btn-3d"
         >
           {showAdd ? "Close" : "+ Add Employee"}
         </button>
@@ -104,7 +104,7 @@ export default function EmployeesPage() {
       {error && <div className="text-sm text-red-600 font-medium">{error}</div>}
 
       {showAdd && (
-        <form onSubmit={handleAddEmployee} className="rounded-xl border border-slate-200 bg-white p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <form onSubmit={handleAddEmployee} className="rounded-xl border border-slate-200/60 bg-white p-4 grid grid-cols-1 md:grid-cols-2 gap-3 shadow-3d">
           {[
             ["name", "Name"],
             ["role", "Role"],
@@ -141,7 +141,7 @@ export default function EmployeesPage() {
         </form>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-slate-200/60 bg-white p-4 shadow-3d">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
           <input
             value={search}

@@ -7,10 +7,10 @@ function SidebarItem({ type, to, icon: Icon, label, collapsed, children }) {
         <NavLink
           to={to}
           className={({ isActive }) =>
-            `flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors ${
+            `flex items-center gap-2 px-2 py-2 rounded-lg text-sm transition-all duration-200 ${
               isActive
-                ? "bg-blue-100 text-blue-800"
-                : "text-gray-700 hover:bg-gray-100"
+                ? "bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 shadow-3d-sm font-semibold"
+                : "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 hover:shadow-3d-sm"
             } ${collapsed ? "justify-center px-2" : ""}`
           }
           title={collapsed ? label : undefined}

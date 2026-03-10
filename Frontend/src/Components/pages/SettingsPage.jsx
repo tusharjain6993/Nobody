@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { staticEmployees } from "../pages/MinisterDashboard/staticData";
+import { useTheme } from "../../context/ThemeContext";
 
 // --- Mock profile of minister (can be read from localStorage later) ---
 const loggedInUser = JSON.parse(localStorage.getItem("loggedInUser")) || {
@@ -25,12 +25,27 @@ export default function SettingsPage() {
     const [name, setName] = useState(loggedInUser.name || "");
     const [email, setEmail] = useState(loggedInUser.email || "");
     const [saved, setSaved] = useState(false);
-    const [darkMode, setDarkMode] = useState(false);
+    const [profileError, setProfileError] = useState("");
+    const { darkMode, toggleDarkMode } = useTheme();
     const [emailNotif, setEmailNotif] = useState(true);
     const [smsNotif, setSmsNotif] = useState(false);
 
     const handleSave = () => {
-        const updated = { ...loggedInUser, name, email };
+        setProfileError("");
+        if (!name?.trim()) {
+            setProfileError("Name is required.");
+            return;
+        }
+        const emailTrim = (email || "").trim().toLowerCase();
+        if (!emailTrim) {
+            setProfileError("Email is required.");
+            return;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
+            setProfileError("Please enter a valid email address.");
+            return;
+        }
+        const updated = { ...loggedInUser, name: name.trim(), email: emailTrim };
         localStorage.setItem("loggedInUser", JSON.stringify(updated));
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
@@ -45,6 +60,7 @@ export default function SettingsPage() {
         border: "1px solid #e2e8f0",
         marginBottom: "1rem",
     };
+    const cardClassName = "settings-card";
     const label = {
         display: "block",
         fontSize: "0.8rem",
@@ -88,34 +104,39 @@ export default function SettingsPage() {
             case "profile":
                 return (
                     <div>
-                        <h2 style={{ fontWeight: "800", color: "#0f172a", fontSize: "1.1rem", margin: "0 0 1rem" }}>
+                        <h2 className="settings-section-title" style={{ fontWeight: "800", color: "#0f172a", fontSize: "1.1rem", margin: "0 0 1rem" }}>
                             👤 Profile Settings
                         </h2>
 
                         {/* Avatar */}
-                        <div style={{ ...card, display: "flex", alignItems: "center", gap: "1.25rem" }}>
+                        <div className={cardClassName} style={{ ...card, display: "flex", alignItems: "center", gap: "1.25rem" }}>
                             <img
                                 src={`https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff&size=80`}
                                 alt="avatar"
                                 style={{ width: "72px", height: "72px", borderRadius: "50%", flexShrink: 0 }}
                             />
                             <div>
-                                <div style={{ fontWeight: "700", color: "#1e293b", fontSize: "1rem" }}>{name}</div>
-                                <div style={{ fontSize: "0.82rem", color: "#64748b", marginTop: "0.2rem" }}>{loggedInUser.role} · {loggedInUser.department}</div>
-                                <div style={{ fontSize: "0.78rem", color: "#94a3b8", marginTop: "0.15rem" }}>{email}</div>
+                                <div className="settings-body-text" style={{ fontWeight: "700", color: "#1e293b", fontSize: "1rem" }}>{name}</div>
+                                <div className="settings-muted" style={{ fontSize: "0.82rem", color: "#64748b", marginTop: "0.2rem" }}>{loggedInUser.role} · {loggedInUser.department}</div>
+                                <div className="settings-muted" style={{ fontSize: "0.78rem", color: "#94a3b8", marginTop: "0.15rem" }}>{email}</div>
                             </div>
                         </div>
 
                         {/* Fields */}
-                        <div style={card}>
+                        <div className={cardClassName} style={card}>
+                            {profileError && (
+                                <div style={{ marginBottom: "1rem", padding: "0.75rem", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", color: "#dc2626", fontSize: "0.875rem" }}>
+                                    {profileError}
+                                </div>
+                            )}
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                                 <div>
                                     <span style={label}>Full Name</span>
-                                    <input value={name} onChange={e => setName(e.target.value)} style={input} />
+                                    <input value={name} onChange={e => { setName(e.target.value); setProfileError(""); }} style={input} placeholder="Your name" />
                                 </div>
                                 <div>
                                     <span style={label}>Email Address</span>
-                                    <input value={email} onChange={e => setEmail(e.target.value)} style={input} />
+                                    <input type="email" value={email} onChange={e => { setEmail(e.target.value); setProfileError(""); }} style={input} placeholder="you@example.com" />
                                 </div>
                                 <div>
                                     <span style={label}>Role</span>
@@ -148,23 +169,23 @@ export default function SettingsPage() {
             case "appearance":
                 return (
                     <div>
-                        <h2 style={{ fontWeight: "800", color: "#0f172a", fontSize: "1.1rem", margin: "0 0 1rem" }}>
+                        <h2 className="settings-section-title" style={{ fontWeight: "800", color: "#0f172a", fontSize: "1.1rem", margin: "0 0 1rem" }}>
                             🎨 Appearance
                         </h2>
-                        <div style={card}>
+                        <div className={cardClassName} style={card}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid #f1f5f9" }}>
                                 <div>
-                                    <div style={{ fontWeight: "700", color: "#1e293b" }}>Dark Mode</div>
-                                    <div style={{ fontSize: "0.8rem", color: "#94a3b8" }}>Switch to dark theme (coming soon)</div>
+                                    <div className="settings-body-text" style={{ fontWeight: "700", color: "#1e293b" }}>Dark Mode</div>
+                                    <div className="settings-muted" style={{ fontSize: "0.8rem", color: "#94a3b8" }}>Switch to dark theme</div>
                                 </div>
-                                <div style={toggle(darkMode)} onClick={() => setDarkMode(v => !v)}>
+                                <div style={toggle(darkMode)} onClick={toggleDarkMode}>
                                     <div style={toggleKnob(darkMode)} />
                                 </div>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 0" }}>
                                 <div>
-                                    <div style={{ fontWeight: "700", color: "#1e293b" }}>Font</div>
-                                    <div style={{ fontSize: "0.8rem", color: "#94a3b8" }}>Currently using Lora — Google Fonts</div>
+                                    <div className="settings-body-text" style={{ fontWeight: "700", color: "#1e293b" }}>Font</div>
+                                    <div className="settings-muted" style={{ fontSize: "0.8rem", color: "#94a3b8" }}>Currently using Lora — Google Fonts</div>
                                 </div>
                                 <span style={{
                                     padding: "0.25rem 0.75rem",
@@ -182,18 +203,18 @@ export default function SettingsPage() {
             case "notifications":
                 return (
                     <div>
-                        <h2 style={{ fontWeight: "800", color: "#0f172a", fontSize: "1.1rem", margin: "0 0 1rem" }}>
+                        <h2 className="settings-section-title" style={{ fontWeight: "800", color: "#0f172a", fontSize: "1.1rem", margin: "0 0 1rem" }}>
                             🔔 Notification Preferences
                         </h2>
-                        <div style={card}>
+                        <div className={cardClassName} style={card}>
                             {[
                                 { label: "Email Notifications", sub: "Get updates on new case requests via email", state: emailNotif, set: setEmailNotif },
                                 { label: "SMS Notifications", sub: "Receive SMS alerts for urgent cases", state: smsNotif, set: setSmsNotif },
                             ].map(item => (
                                 <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.85rem 0", borderBottom: "1px solid #f8fafc" }}>
                                     <div>
-                                        <div style={{ fontWeight: "700", color: "#1e293b" }}>{item.label}</div>
-                                        <div style={{ fontSize: "0.8rem", color: "#94a3b8" }}>{item.sub}</div>
+                                        <div className="settings-body-text" style={{ fontWeight: "700", color: "#1e293b" }}>{item.label}</div>
+                                        <div className="settings-muted" style={{ fontSize: "0.8rem", color: "#94a3b8" }}>{item.sub}</div>
                                     </div>
                                     <div style={toggle(item.state)} onClick={() => item.set(v => !v)}>
                                         <div style={toggleKnob(item.state)} />
@@ -207,10 +228,10 @@ export default function SettingsPage() {
             case "security":
                 return (
                     <div>
-                        <h2 style={{ fontWeight: "800", color: "#0f172a", fontSize: "1.1rem", margin: "0 0 1rem" }}>
+                        <h2 className="settings-section-title" style={{ fontWeight: "800", color: "#0f172a", fontSize: "1.1rem", margin: "0 0 1rem" }}>
                             🔒 Security
                         </h2>
-                        <div style={card}>
+                        <div className={cardClassName} style={card}>
                             <div style={{ marginBottom: "1rem" }}>
                                 <span style={label}>Current Password</span>
                                 <input type="password" placeholder="••••••••" style={input} />
@@ -240,10 +261,10 @@ export default function SettingsPage() {
             case "about":
                 return (
                     <div>
-                        <h2 style={{ fontWeight: "800", color: "#0f172a", fontSize: "1.1rem", margin: "0 0 1rem" }}>
+                        <h2 className="settings-section-title" style={{ fontWeight: "800", color: "#0f172a", fontSize: "1.1rem", margin: "0 0 1rem" }}>
                             ℹ️ About
                         </h2>
-                        <div style={card}>
+                        <div className={cardClassName} style={card}>
                             {[
                                 ["Application", "HCM Minister Portal"],
                                 ["Version", "v1.0.0 (Static)"],
@@ -252,8 +273,8 @@ export default function SettingsPage() {
                                 ["Support", "support@hcm.gov.in"],
                             ].map(([k, v]) => (
                                 <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "0.65rem 0", borderBottom: "1px solid #f8fafc" }}>
-                                    <span style={{ fontWeight: "700", color: "#475569", fontSize: "0.875rem" }}>{k}</span>
-                                    <span style={{ color: "#1e293b", fontSize: "0.875rem" }}>{v}</span>
+                                    <span className="settings-muted" style={{ fontWeight: "700", color: "#475569", fontSize: "0.875rem" }}>{k}</span>
+                                    <span className="settings-body-text" style={{ color: "#1e293b", fontSize: "0.875rem" }}>{v}</span>
                                 </div>
                             ))}
                         </div>
@@ -265,12 +286,12 @@ export default function SettingsPage() {
     };
 
     return (
-        <div style={{ padding: "1.5rem", maxWidth: "1000px", margin: "0 auto", fontFamily: "'Lora', serif" }}>
-            <h1 style={{ fontSize: "1.4rem", fontWeight: "800", color: "#0f172a", margin: "0 0 1.5rem" }}>⚙️ Settings</h1>
+        <div className="settings-page" style={{ padding: "1.5rem", maxWidth: "1000px", margin: "0 auto", fontFamily: "'Lora', serif" }}>
+            <h1 className="settings-page-title" style={{ fontSize: "1.4rem", fontWeight: "800", color: "#0f172a", margin: "0 0 1.5rem" }}>⚙️ Settings</h1>
 
             <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: "1.25rem", alignItems: "start" }}>
                 {/* Left Nav */}
-                <div style={{
+                <div className="settings-nav" style={{
                     background: "#fff", borderRadius: "14px",
                     border: "1px solid #e2e8f0",
                     boxShadow: "0 2px 8px rgba(0,0,0,0.05)",

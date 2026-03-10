@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { NotificationProvider } from './context/NotificationContext'
 import { useHCMAuth } from './minister/HCMAuthContext'
+import { isStaffRole } from './constants/caseStatus'
 
 import MainLayout from './Components/MainLayout'
 import ProtectedRoute from './Components/ProtectedRoute'
@@ -15,13 +16,17 @@ import HCMCasesListPage from './minister/pages/HCMCasesListPage'
 import HCMCaseDetailPage from './minister/pages/HCMCaseDetailPage'
 import HCMNewCasePage from './minister/pages/HCMNewCasePage'
 import CitizenMyCasesPage from './minister/pages/CitizenMyCasesPage'
+import WorkflowPipelinePage from './minister/pages/WorkflowPipelinePage'
+import PendencyMonitorPage from './minister/pages/PendencyMonitorPage'
+
+const STAFF_ROLES = ["admin", "ps", "aps", "additional_ps", "staff", "official"];
 
 function App() {
   const { isAuthenticated, user } = useHCMAuth();
 
   const defaultRoute = !isAuthenticated
     ? "/login"
-    : user?.role === "admin"
+    : isStaffRole(user?.role)
       ? "/dashboard"
       : "/new-case";
 
@@ -42,34 +47,49 @@ function App() {
             <MainLayout />
           </ProtectedRoute>
         }>
-          {/* Admin-only routes */}
+          {/* Staff routes (admin, PS, APS, staff, etc.) */}
           <Route path="/dashboard" element={
-            <ProtectedRoute allowedRoles={["admin"]}>
+            <ProtectedRoute allowedRoles={STAFF_ROLES}>
               <MinisterDashboard />
             </ProtectedRoute>
           } />
-          <Route path="/employees" element={
-            <ProtectedRoute allowedRoles={["admin"]}>
-              <EmployeesPage />
+          <Route path="/workflow" element={
+            <ProtectedRoute allowedRoles={STAFF_ROLES}>
+              <WorkflowPipelinePage />
             </ProtectedRoute>
           } />
-          <Route path="/employee" element={
-            <ProtectedRoute allowedRoles={["admin"]}>
+          <Route path="/pendency" element={
+            <ProtectedRoute allowedRoles={STAFF_ROLES}>
+              <PendencyMonitorPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/employees" element={
+            <ProtectedRoute allowedRoles={STAFF_ROLES}>
               <EmployeesPage />
             </ProtectedRoute>
           } />
           <Route path="/department" element={
-            <ProtectedRoute allowedRoles={["admin"]}>
+            <ProtectedRoute allowedRoles={STAFF_ROLES}>
               <DepartmentPage />
             </ProtectedRoute>
           } />
           <Route path="/cases" element={
-            <ProtectedRoute allowedRoles={["admin"]}>
+            <ProtectedRoute allowedRoles={STAFF_ROLES}>
               <HCMCasesListPage />
             </ProtectedRoute>
           } />
+          <Route path="/cases/archived" element={
+            <ProtectedRoute allowedRoles={STAFF_ROLES}>
+              <HCMCasesListPage defaultView="archived" />
+            </ProtectedRoute>
+          } />
+          <Route path="/cases/deleted" element={
+            <ProtectedRoute allowedRoles={STAFF_ROLES}>
+              <HCMCasesListPage defaultView="deleted" />
+            </ProtectedRoute>
+          } />
           <Route path="/cases/:id" element={
-            <ProtectedRoute allowedRoles={["admin"]}>
+            <ProtectedRoute allowedRoles={STAFF_ROLES}>
               <HCMCaseDetailPage />
             </ProtectedRoute>
           } />

@@ -2,6 +2,8 @@ import { Router } from "express";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import Otp from "../models/Otp.js";
+import { requireAuth } from "../middleware/auth.js";
+import { maskUserResponse } from "../utils/mask.js";
 import { generateOtp } from "../utils/generateOtp.js";
 import { sendOtpEmail } from "../utils/sendEmail.js";
 
@@ -30,6 +32,9 @@ router.post("/register", async (req, res) => {
       await User.deleteOne({ _id: existingUser._id });
     }
 
+    const citizenCount = await User.countDocuments({ role: "citizen" });
+    const citizenUniqueId = `CTZ-HP-${String(citizenCount + 1).padStart(6, "0")}`;
+
     const user = await User.create({
       name,
       email: normalizedEmail,
@@ -39,6 +44,7 @@ router.post("/register", async (req, res) => {
       aadhaar: cleanedAadhaar,
       password,
       role: "citizen",
+      citizenUniqueId,
       isVerified: false,
     });
 
@@ -65,6 +71,7 @@ router.post("/register", async (req, res) => {
         : "OTP generated. Check your email (or use the dev OTP shown below).",
       userId: user._id,
       email: user.email,
+      citizenUniqueId: user.citizenUniqueId,
     };
     if (process.env.NODE_ENV !== "production" || !emailSent) response.devOtp = otp;
 
@@ -108,10 +115,17 @@ router.post("/verify-otp", async (req, res) => {
       return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    await User.updateOne({ email }, { isVerified: true });
+    const updated = await User.findOneAndUpdate(
+      { email },
+      { isVerified: true },
+      { new: true }
+    );
     await Otp.deleteMany({ email });
 
-    res.json({ message: "Registration successful! You can now login." });
+    res.json({
+      message: "Registration successful! You can now login with your Citizen ID.",
+      citizenUniqueId: updated?.citizenUniqueId,
+    });
   } catch (err) {
     console.error("OTP verify error:", err);
     res.status(500).json({ message: "Verification failed" });
@@ -150,6 +164,106 @@ router.post("/resend-otp", async (req, res) => {
   } catch (err) {
     console.error("Resend OTP error:", err);
     res.status(500).json({ message: "Failed to resend OTP" });
+  }
+});
+
+router.post("/send-login-otp", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body?.email);
+    const phone = String(req.body?.phone || "").replace(/\D/g, "").trim();
+    if (!email && !phone) {
+      return res.status(400).json({ message: "Email or phone is required" });
+    }
+
+    const user = email
+      ? await User.findOne({ email, isVerified: true })
+      : await User.findOne({ phone: phone || req.body?.phone?.trim(), isVerified: true });
+    if (!user) {
+      return res.status(404).json({ message: "No verified account found for this email or phone" });
+    }
+
+    const otp = generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const phoneNorm = user.phone ? String(user.phone).replace(/\D/g, "").trim() : null;
+    await Otp.deleteMany({ $or: [{ email: user.email }, { phone: phoneNorm }].filter((q) => Object.values(q)[0]) });
+    await Otp.create({
+      email: user.email || null,
+      phone: phoneNorm,
+      otp,
+      expiresAt,
+    });
+
+    if (user.email) {
+      try {
+        await sendOtpEmail(user.email, otp);
+      } catch (emailErr) {
+        console.error("Login OTP email error:", emailErr.message);
+        console.log(`\n>>> Login OTP for ${user.email}: ${otp}\n`);
+      }
+    }
+    if (user.phone && !user.email) {
+      console.log(`[SMS stub] Login OTP to ${user.phone}: ${otp}`);
+    }
+
+    const response = {
+      message: user.email ? "OTP sent to your email." : "OTP sent to your phone.",
+      email: user.email || undefined,
+      phone: user.phone ? "****" + user.phone.slice(-4) : undefined,
+    };
+    if (process.env.NODE_ENV !== "production") response.devOtp = otp;
+    res.json(response);
+  } catch (err) {
+    console.error("Send login OTP error:", err);
+    res.status(500).json({ message: err.message || "Failed to send OTP" });
+  }
+});
+
+router.post("/login-with-otp", async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body?.email);
+    const phone = String(req.body?.phone || "").replace(/\D/g, "").trim();
+    const otp = normalizeOtp(req.body?.otp);
+    if ((!email && !phone) || !otp) {
+      return res.status(400).json({ message: "Email or phone, and OTP are required" });
+    }
+
+    const record = await Otp.findOne(
+      email ? { email } : { phone }
+    ).sort({ _id: -1 });
+    if (!record) return res.status(400).json({ message: "No OTP found. Request a new one." });
+    if (record.expiresAt < new Date()) {
+      await Otp.deleteMany(record.email ? { email: record.email } : { phone: record.phone });
+      return res.status(400).json({ message: "OTP has expired." });
+    }
+    if (String(record.otp) !== otp) return res.status(401).json({ message: "Invalid OTP" });
+
+    const user = await User.findOne(record.email ? { email: record.email } : { phone: record.phone }).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    await Otp.deleteMany(record.email ? { email: record.email } : { phone: record.phone });
+
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      message: "Login successful",
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        gender: user.gender,
+        age: user.age,
+      },
+    });
+  } catch (err) {
+    console.error("Login with OTP error:", err);
+    res.status(500).json({ message: err.message || "Login failed" });
   }
 });
 
@@ -201,20 +315,51 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.get("/me", async (req, res) => {
+// Citizen login using unique Citizen ID (no email/password)
+router.post("/citizen-id-login", async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ message: "No token" });
+    const rawId = String(req.body?.citizenId || req.body?.citizenUniqueId || "").trim();
+    if (!rawId) {
+      return res.status(400).json({ message: "Citizen ID is required" });
+    }
 
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select("-password");
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const citizen = await User.findOne({
+      citizenUniqueId: rawId,
+      role: "citizen",
+      isVerified: true,
+    });
+    if (!citizen) {
+      return res.status(404).json({ message: "No verified citizen found for this ID" });
+    }
 
-    res.json({ user });
+    const token = jwt.sign(
+      { id: citizen._id, email: citizen.email, role: citizen.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      message: "Login successful",
+      token,
+      user: {
+        id: citizen._id,
+        name: citizen.name,
+        email: citizen.email,
+        role: citizen.role,
+        phone: citizen.phone,
+        gender: citizen.gender,
+        age: citizen.age,
+        citizenUniqueId: citizen.citizenUniqueId,
+      },
+    });
   } catch (err) {
-    res.status(401).json({ message: "Invalid token" });
+    console.error("Citizen ID login error:", err);
+    res.status(500).json({ message: err.message || "Login failed" });
   }
+});
+
+router.get("/me", requireAuth, (req, res) => {
+  res.json({ user: maskUserResponse(req.user) });
 });
 
 export default router;

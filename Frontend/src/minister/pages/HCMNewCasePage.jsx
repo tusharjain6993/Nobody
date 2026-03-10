@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle, AlertCircle } from "lucide-react";
+import { CheckmarkCircleRegular, ErrorCircleRegular } from "@fluentui/react-icons";
 import { useHCMAuth } from "../HCMAuthContext";
-import { casesApi, departmentApi } from "../ministerApi";
+import { casesApi } from "../ministerApi";
 import { Link } from "react-router-dom";
+import { MOC_DEPARTMENTS, MOC_MINISTER_OFFICE_STAFF } from "../../constants/mocWhoIsWho";
 
 const INDIA_LOCATION_MINISTERS = {
   Rajasthan: {
@@ -34,6 +35,46 @@ const INDIA_LOCATION_MINISTERS = {
   },
 };
 
+// Full list of Indian states and union territories for the State dropdown
+const INDIA_STATES = [
+  "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jharkhand",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
+  "Telangana",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal",
+  "Andaman and Nicobar Islands",
+  "Chandigarh",
+  "Dadra and Nagar Haveli and Daman and Diu",
+  "Delhi",
+  "Jammu and Kashmir",
+  "Ladakh",
+  "Lakshadweep",
+  "Puducherry",
+];
+
 export default function HCMNewCasePage() {
   const { user } = useHCMAuth();
   const [form, setForm] = useState({
@@ -44,30 +85,14 @@ export default function HCMNewCasePage() {
     districtCity: "",
     pincode: "",
     localAreaMinister: "",
+    details: "",
   });
+  const [documents, setDocuments] = useState([]);
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
   const [pinLoading, setPinLoading] = useState(false);
-  const [departmentOptions, setDepartmentOptions] = useState([]);
-
-  useEffect(() => {
-    let mounted = true;
-    async function loadDepartments() {
-      try {
-        const res = await departmentApi.options();
-        if (!mounted) return;
-        setDepartmentOptions(res.departments || []);
-      } catch (err) {
-        if (!mounted) return;
-        setErrors((prev) => ({ ...prev, category: err.message || "Failed to load categories" }));
-      }
-    }
-    loadDepartments();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const [departmentOptions] = useState(MOC_DEPARTMENTS);
 
   const availableCities = useMemo(() => {
     if (!form.state || !INDIA_LOCATION_MINISTERS[form.state]) return [];
@@ -77,7 +102,7 @@ export default function HCMNewCasePage() {
   const validate = () => {
     const e = {};
     if (!form.purpose.trim()) e.purpose = "Purpose / issue is required.";
-    if (!form.category) e.category = "Please select a category.";
+    // Category is now optional
     if (!form.referralPerson.trim()) e.referralPerson = "Referral person is required.";
     if (!form.state) e.state = "State is required.";
     if (!form.districtCity) e.districtCity = "District / city is required.";
@@ -119,6 +144,7 @@ export default function HCMNewCasePage() {
     if (!validate()) return;
     try {
       setLoading(true);
+      const docList = documents.filter((d) => d.name?.trim() && d.url?.trim());
       const res = await casesApi.create({
         purpose: form.purpose,
         category: form.category,
@@ -127,6 +153,8 @@ export default function HCMNewCasePage() {
         districtCity: form.districtCity,
         pincode: form.pincode,
         localAreaMinister: form.localAreaMinister,
+        details: form.details || undefined,
+        documents: docList.length ? docList : undefined,
       });
       setSuccess(res.case?.caseId || "Submitted");
       setForm({
@@ -137,7 +165,9 @@ export default function HCMNewCasePage() {
         districtCity: "",
         pincode: "",
         localAreaMinister: "",
+        details: "",
       });
+      setDocuments([]);
     } catch (err) {
       setErrors((prev) => ({ ...prev, submit: err.message || "Failed to submit case" }));
     } finally {
@@ -155,9 +185,16 @@ export default function HCMNewCasePage() {
       districtCity: "",
       pincode: "",
       localAreaMinister: "",
+      details: "",
     });
+    setDocuments([]);
     setErrors({});
   };
+
+  const addDocument = () => setDocuments((d) => [...d, { name: "", url: "" }]);
+  const updateDocument = (i, field, value) =>
+    setDocuments((d) => d.map((doc, j) => (j === i ? { ...doc, [field]: value } : doc)));
+  const removeDocument = (i) => setDocuments((d) => d.filter((_, j) => j !== i));
 
   if (success) {
     return (
@@ -172,7 +209,7 @@ export default function HCMNewCasePage() {
             borderRadius: "50%", display: "flex", alignItems: "center",
             justifyContent: "center", margin: "0 auto 1.5rem",
           }}>
-            <CheckCircle size={40} color="#22c55e" />
+            <CheckmarkCircleRegular style={{ fontSize: 40, color: "#22c55e" }} />
           </div>
           <h2 style={{ fontSize: "1.5rem", fontWeight: "800", color: "#0f172a", marginBottom: "0.5rem" }}>Case Submitted!</h2>
           <p style={{ color: "#64748b", marginBottom: "1.5rem" }}>Your case has been registered successfully.</p>
@@ -265,55 +302,74 @@ export default function HCMNewCasePage() {
             />
             {errors.purpose && (
               <p style={{ color: "#ef4444", fontSize: "0.8rem", margin: "0.3rem 0 0", display: "flex", alignItems: "center", gap: "4px" }}>
-                <AlertCircle size={14} /> {errors.purpose}
+                <ErrorCircleRegular style={{ fontSize: 14 }} /> {errors.purpose}
               </p>
             )}
           </div>
 
-          {/* Category & Referral */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
-            <div>
-              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "0.4rem" }}>
-                Category *
-              </label>
-              <select
-                value={form.category}
-                onChange={(e) => {
-                  setForm({ ...form, category: e.target.value });
-                  if (errors.category) setErrors({ ...errors, category: null });
-                }}
-                disabled={departmentOptions.length === 0}
-                style={{ ...(errors.category ? errorInputStyle : inputStyle), cursor: "pointer" }}
-              >
-                <option value="" disabled>
-                  {departmentOptions.length === 0 ? "No departments available" : "Select category"}
-                </option>
-                {departmentOptions.map((d) => (
-                  <option key={d.id} value={d.name}>{d.name}</option>
-                ))}
-              </select>
-              {errors.category && (
-                <p style={{ color: "#ef4444", fontSize: "0.8rem", margin: "0.3rem 0 0", display: "flex", alignItems: "center", gap: "4px" }}>
-                  <AlertCircle size={14} /> {errors.category}
-                </p>
-              )}
-            </div>
+          {/* Referral Person */}
+          <div style={{ marginBottom: "1.25rem" }}>
             <div>
               <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "0.4rem" }}>
                 Referral Person *
               </label>
-              <input
+              <select
                 value={form.referralPerson}
                 onChange={(e) => setForm({ ...form, referralPerson: e.target.value })}
-                placeholder="e.g. PS, Aman, local officer"
-                style={errors.referralPerson ? errorInputStyle : inputStyle}
-              />
+                style={{ ...(errors.referralPerson ? errorInputStyle : inputStyle), cursor: "pointer" }}
+              >
+                <option value="">Select referral person</option>
+                {MOC_MINISTER_OFFICE_STAFF.map((p) => (
+                  <option key={p.id} value={p.name}>
+                    {p.name} – {p.designation}
+                  </option>
+                ))}
+              </select>
               {errors.referralPerson && (
                 <p style={{ color: "#ef4444", fontSize: "0.8rem", margin: "0.3rem 0 0" }}>
                   {errors.referralPerson}
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Details */}
+          <div style={{ marginBottom: "1.25rem" }}>
+            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "0.4rem" }}>
+              Additional details (optional)
+            </label>
+            <textarea
+              rows={3}
+              value={form.details}
+              onChange={(e) => setForm({ ...form, details: e.target.value })}
+              placeholder="Any extra information, references, or context..."
+              style={{ ...inputStyle, resize: "vertical" }}
+            />
+          </div>
+
+          {/* Document links */}
+          <div style={{ marginBottom: "1.25rem" }}>
+            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "700", color: "#475569", marginBottom: "0.4rem" }}>
+              Document links (optional)
+            </label>
+            {documents.map((doc, i) => (
+              <div key={i} style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem", alignItems: "center" }}>
+                <input
+                  placeholder="Document name"
+                  value={doc.name}
+                  onChange={(e) => updateDocument(i, "name", e.target.value)}
+                  style={{ ...inputStyle, flex: "1 1 140px" }}
+                />
+                <input
+                  placeholder="URL"
+                  value={doc.url}
+                  onChange={(e) => updateDocument(i, "url", e.target.value)}
+                  style={{ ...inputStyle, flex: "2 1 200px" }}
+                />
+                <button type="button" onClick={() => removeDocument(i)} style={{ padding: "0.5rem", color: "#ef4444", background: "none", border: "none", cursor: "pointer", fontSize: "0.85rem" }}>Remove</button>
+              </div>
+            ))}
+            <button type="button" onClick={addDocument} style={{ padding: "0.5rem 0.75rem", fontSize: "0.85rem", color: "#4f46e5", background: "#eef2ff", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: 600 }}>+ Add document link</button>
           </div>
 
           {/* Location */}
@@ -336,7 +392,7 @@ export default function HCMNewCasePage() {
                 style={{ ...(errors.state ? errorInputStyle : inputStyle), cursor: "pointer" }}
               >
                 <option value="">Select state</option>
-                {Object.keys(INDIA_LOCATION_MINISTERS).map((s) => (
+                {INDIA_STATES.map((s) => (
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
