@@ -3,14 +3,13 @@ import {
   NavigationRegular,
   DataBarVerticalRegular,
   FlowRegular,
-  ClockRegular,
-  PeopleRegular,
   BuildingMultipleRegular,
   GavelRegular,
   DocumentAddRegular,
   SettingsRegular,
   ArchiveRegular,
   DeleteRegular,
+  CalendarLtrRegular,
 } from "@fluentui/react-icons";
 import { useNavigate, Link } from "react-router-dom";
 import SidebarItem from "./small/SidebarItem";
@@ -63,20 +62,6 @@ function Sidebar({ collapsed, onToggle }) {
                                 />
                                 <SidebarItem
                                     type="NavLink"
-                                    to="/pendency"
-                                    icon={ClockRegular}
-                                    label="Pendency"
-                                    collapsed={collapsed}
-                                />
-                                <SidebarItem
-                                    type="NavLink"
-                                    to="/employees"
-                                    icon={PeopleRegular}
-                                    label="Employees"
-                                    collapsed={collapsed}
-                                />
-                                <SidebarItem
-                                    type="NavLink"
                                     to="/department"
                                     icon={BuildingMultipleRegular}
                                     label="Department"
@@ -101,6 +86,13 @@ function Sidebar({ collapsed, onToggle }) {
                                     to="/cases/deleted"
                                     icon={DeleteRegular}
                                     label="Deleted"
+                                    collapsed={collapsed}
+                                />
+                                <SidebarItem
+                                    type="NavLink"
+                                    to="/meetings"
+                                    icon={CalendarLtrRegular}
+                                    label="Meetings"
                                     collapsed={collapsed}
                                 />
                             </>

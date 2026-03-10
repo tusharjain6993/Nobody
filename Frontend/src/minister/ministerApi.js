@@ -123,6 +123,13 @@ export const authorityApi = {
   },
 };
 
+// ─── Meetings ─────────────────────────────────────────────────────────────
+export const meetingsApi = {
+  list: () => request("GET", "/meetings", null, getToken()),
+  create: (body) => request("POST", "/meetings", body, getToken()),
+  updateStatus: (id, status) => request("PATCH", `/meetings/${id}`, { status }, getToken()),
+};
+
 // ─── Reference data ───────────────────────────────────────────────────────
 export const referenceApi = {
   referringOfficers: () => request("GET", "/referring-officers"),

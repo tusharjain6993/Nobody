@@ -7,7 +7,6 @@ import MainLayout from './Components/MainLayout'
 import ProtectedRoute from './Components/ProtectedRoute'
 import MinisterDashboard from './Components/pages/MinisterDashboard/MinisterDashboard'
 import SettingsPage from './Components/pages/SettingsPage'
-import EmployeesPage from './Components/pages/EmployeesPage'
 import DepartmentPage from './Components/pages/DepartmentPage'
 
 import HCMLoginPage from './minister/pages/HCMLoginPage'
@@ -17,7 +16,7 @@ import HCMCaseDetailPage from './minister/pages/HCMCaseDetailPage'
 import HCMNewCasePage from './minister/pages/HCMNewCasePage'
 import CitizenMyCasesPage from './minister/pages/CitizenMyCasesPage'
 import WorkflowPipelinePage from './minister/pages/WorkflowPipelinePage'
-import PendencyMonitorPage from './minister/pages/PendencyMonitorPage'
+import MeetingsPage from './minister/pages/MeetingsPage'
 
 const STAFF_ROLES = ["admin", "ps", "aps", "additional_ps", "staff", "official"];
 
@@ -58,14 +57,9 @@ function App() {
               <WorkflowPipelinePage />
             </ProtectedRoute>
           } />
-          <Route path="/pendency" element={
+          <Route path="/meetings" element={
             <ProtectedRoute allowedRoles={STAFF_ROLES}>
-              <PendencyMonitorPage />
-            </ProtectedRoute>
-          } />
-          <Route path="/employees" element={
-            <ProtectedRoute allowedRoles={STAFF_ROLES}>
-              <EmployeesPage />
+              <MeetingsPage />
             </ProtectedRoute>
           } />
           <Route path="/department" element={

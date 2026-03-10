@@ -8,6 +8,7 @@ import caseRoutes from "./routes/cases.js";
 import employeeRoutes from "./routes/employees.js";
 import departmentRoutes from "./routes/departments.js";
 import notificationRoutes from "./routes/notifications.js";
+import meetingRoutes from "./routes/meetings.js";
 import User from "./models/User.js";
 import Department from "./models/Department.js";
 dotenv.config();
@@ -27,6 +28,7 @@ app.use("/api/v1", caseRoutes);
 app.use("/api/v1", employeeRoutes);
 app.use("/api/v1", departmentRoutes);
 app.use("/api/v1", notificationRoutes);
+app.use("/api/v1", meetingRoutes);
 app.get("/", (req, res) => {
   res.json({ status: "HCM Backend running" });
 });

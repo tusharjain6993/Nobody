@@ -3,6 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { casesApi } from "../ministerApi";
 import { MOC_MINISTER_OFFICE_STAFF } from "../../constants/mocWhoIsWho";
 
+const PENDENCY_PRIORITY_COLORS = {
+  LOW: "text-emerald-600",
+  MEDIUM: "text-amber-600",
+  HIGH: "text-orange-600",
+  CRITICAL: "text-red-600",
+};
+
 const URGENCY_STYLES = {
   LOW: "text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-900/30 dark:border-emerald-800",
   MEDIUM: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-900/30 dark:border-amber-800",
@@ -88,6 +95,18 @@ function Arrow() {
   );
 }
 
+function PendencyStatCard({ label, value, accent }) {
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100/60 dark:border-slate-700/60 shadow-3d hover:shadow-3d-hover transition-all duration-300 px-4 py-3 flex items-center justify-between">
+      <div>
+        <p className="text-[0.72rem] font-semibold tracking-wide uppercase text-slate-400 dark:text-slate-500">{label}</p>
+        <p className="mt-1 text-lg font-extrabold text-slate-900 dark:text-slate-100">{value}</p>
+      </div>
+      <div className="w-8 h-8 rounded-full border border-slate-100/60 dark:border-slate-600/60 shadow-3d-sm flex items-center justify-center text-xs font-bold text-slate-400">{accent}</div>
+    </div>
+  );
+}
+
 export default function WorkflowPipelinePage() {
   const navigate = useNavigate();
   const [cases, setCases] = useState([]);
@@ -150,6 +169,38 @@ export default function WorkflowPipelinePage() {
   const totalC = citizenLane.length;
   const totalA = adminLane.length;
   const totalM = meetingLane.length;
+
+  const today = new Date();
+  const { totalPending, overdueCount, dueSoonCount, onTrackCount, agingBuckets, overdueAssignments } =
+    useMemo(() => {
+      const pendingStatuses = ["SUBMITTED", "IN_REVIEW", "APPROVED", "REQUEST_CLARIFICATION", "SCHEDULED"];
+      let totalPending = 0, overdueCount = 0, dueSoonCount = 0, onTrackCount = 0;
+      const agingBuckets = { lt7: 0, d7to14: 0, d14to30: 0, gte30: 0 };
+      const overdueAssignments = [];
+
+      for (const c of cases) {
+        const created = new Date(c.createdAt);
+        const ageDays = Math.floor((today - created) / (1000 * 60 * 60 * 24));
+        if (pendingStatuses.includes(c.status)) {
+          totalPending += 1;
+          if (ageDays < 7) agingBuckets.lt7 += 1;
+          else if (ageDays < 14) agingBuckets.d7to14 += 1;
+          else if (ageDays < 30) agingBuckets.d14to30 += 1;
+          else agingBuckets.gte30 += 1;
+        }
+        for (const a of (c.assignments || [])) {
+          if (!a.dueDate || ["RESOLVED", "CLOSED"].includes(a.status)) continue;
+          const due = new Date(a.dueDate);
+          const diffDays = Math.floor((today - due) / (1000 * 60 * 60 * 24));
+          if (diffDays > 0) {
+            overdueCount += 1;
+            overdueAssignments.push({ case: c, assignment: a, daysOver: diffDays });
+          } else if (diffDays >= -3) dueSoonCount += 1;
+          else onTrackCount += 1;
+        }
+      }
+      return { totalPending, overdueCount, dueSoonCount, onTrackCount, agingBuckets, overdueAssignments };
+    }, [cases, today]);
 
   return (
     <div className="p-5 max-w-[1200px] mx-auto">
@@ -316,6 +367,98 @@ export default function WorkflowPipelinePage() {
                   </div>
                 </button>
               ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Pendency Monitor Section ── */}
+      <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6">
+        <div className="mb-4">
+          <h2 className="text-lg font-extrabold text-slate-900 dark:text-slate-100 mb-1">
+            Pendency Monitor
+          </h2>
+          <p className="text-[0.72rem] text-slate-500 dark:text-slate-400">
+            Pending workload, overdue assignments, and task aging across all cases.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+          <PendencyStatCard label="Total pending" value={loading ? "…" : totalPending} accent="●" />
+          <PendencyStatCard label="Overdue" value={loading ? "…" : overdueCount} accent="!" />
+          <PendencyStatCard label="Due in 3 days" value={loading ? "…" : dueSoonCount} accent="⚠" />
+          <PendencyStatCard label="On track" value={loading ? "…" : onTrackCount} accent="✓" />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100/60 dark:border-slate-700/60 shadow-3d p-4">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+              Aging analysis
+            </p>
+            <div className="space-y-2">
+              {[
+                { key: "lt7", label: "< 7d" },
+                { key: "d7to14", label: "7–14d" },
+                { key: "d14to30", label: "14–30d" },
+                { key: "gte30", label: "30d+" },
+              ].map((row) => {
+                const count = agingBuckets[row.key] || 0;
+                const width = totalPending ? Math.max((count / totalPending) * 100, 5) : 0;
+                return (
+                  <div key={row.key} className="flex items-center gap-3">
+                    <span className="w-14 text-[0.72rem] text-slate-500 dark:text-slate-400">{row.label}</span>
+                    <div className="flex-1 h-3 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                      <div className="h-full rounded-full bg-amber-400/90" style={{ width: `${width}%` }} />
+                    </div>
+                    <span className="w-5 text-[0.72rem] text-slate-500 dark:text-slate-400 text-right">{count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100/60 dark:border-slate-700/60 shadow-3d p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Overdue tasks</p>
+              <p className="text-[0.68rem] text-slate-400">{overdueAssignments.length} past deadline</p>
+            </div>
+            {loading ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
+            ) : overdueAssignments.length === 0 ? (
+              <p className="text-[0.78rem] text-slate-400 dark:text-slate-500">No overdue assignments at the moment.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-[0.75rem]">
+                  <thead className="bg-slate-50 dark:bg-slate-800/80">
+                    <tr>
+                      {["Task ID", "Subject", "Holder", "Days over", "Priority"].map((h) => (
+                        <th key={h} className="text-left py-2 px-2 text-slate-400 dark:text-slate-500 font-semibold text-[0.68rem] uppercase border-b border-slate-200 dark:border-slate-700">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overdueAssignments.map(({ case: c, assignment: a, daysOver }) => (
+                      <tr
+                        key={`${c._id}-${a._id}`}
+                        className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer"
+                        onClick={() => navigate(`/cases/${c._id}`)}
+                      >
+                        <td className="py-1.5 px-2 font-semibold text-indigo-500 dark:text-indigo-300">{c.caseId}</td>
+                        <td className="py-1.5 px-2 text-slate-700 dark:text-slate-200 max-w-[180px] truncate">{a.title}</td>
+                        <td className="py-1.5 px-2 text-slate-500 dark:text-slate-400 max-w-[140px] truncate">{a.assignedToName || "—"}</td>
+                        <td className="py-1.5 px-2 font-semibold text-red-600 dark:text-red-400">{daysOver}d</td>
+                        <td className="py-1.5 px-2">
+                          <span className={`text-[0.7rem] font-semibold ${PENDENCY_PRIORITY_COLORS[a.priority] || "text-slate-500"}`}>
+                            {a.priority || "—"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>
