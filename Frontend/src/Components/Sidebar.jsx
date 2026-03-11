@@ -2,8 +2,6 @@ import {
   SignOutRegular,
   NavigationRegular,
   DataBarVerticalRegular,
-  FlowRegular,
-  BuildingMultipleRegular,
   GavelRegular,
   DocumentAddRegular,
   SettingsRegular,
@@ -15,6 +13,7 @@ import { useNavigate, Link } from "react-router-dom";
 import SidebarItem from "./small/SidebarItem";
 import { useHCMAuth } from "../minister/HCMAuthContext";
 import { isStaffRole } from "../constants/caseStatus";
+import { getRoleLabel } from "../constants/adminWorkflow";
 
 function Sidebar({ collapsed, onToggle }) {
     const navigate = useNavigate();
@@ -51,20 +50,6 @@ function Sidebar({ collapsed, onToggle }) {
                                     to="/dashboard"
                                     icon={DataBarVerticalRegular}
                                     label="Dashboard"
-                                    collapsed={collapsed}
-                                />
-                                <SidebarItem
-                                    type="NavLink"
-                                    to="/workflow"
-                                    icon={FlowRegular}
-                                    label="Workflow"
-                                    collapsed={collapsed}
-                                />
-                                <SidebarItem
-                                    type="NavLink"
-                                    to="/department"
-                                    icon={BuildingMultipleRegular}
-                                    label="Department"
                                     collapsed={collapsed}
                                 />
                                 <SidebarItem
@@ -131,7 +116,7 @@ function Sidebar({ collapsed, onToggle }) {
                     {!collapsed && user && (
                         <div className="mb-2 px-2 py-1.5">
                             <p className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">{user.name}</p>
-                            <p className="text-xs text-gray-500 dark:text-slate-400 truncate capitalize">{user.role}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{getRoleLabel(user.role)}</p>
                         </div>
                     )}
                     <SidebarItem type="" collapsed={collapsed} label="Logout">

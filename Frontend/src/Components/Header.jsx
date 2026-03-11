@@ -11,6 +11,7 @@ import { useNotifications } from "../context/NotificationContext";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useHCMAuth } from "../minister/HCMAuthContext";
 import { notificationsApi } from "../minister/ministerApi";
+import { getRoleLabel } from "../constants/adminWorkflow";
 
 const Header = () => {
     const { user, logout } = useHCMAuth();
@@ -140,7 +141,7 @@ const Header = () => {
                                     {user?.name || "User"}
                                 </p>
                                 <p className="text-gray-500 dark:text-slate-400 text-xs break-all line-clamp-1 capitalize">
-                                    {user?.role || "citizen"} · {user?.email}
+                                    {getRoleLabel(user?.role) || "Citizen"} · {user?.email}
                                 </p>
                             </div>
                         </div>

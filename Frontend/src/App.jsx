@@ -7,7 +7,6 @@ import MainLayout from './Components/MainLayout'
 import ProtectedRoute from './Components/ProtectedRoute'
 import MinisterDashboard from './Components/pages/MinisterDashboard/MinisterDashboard'
 import SettingsPage from './Components/pages/SettingsPage'
-import DepartmentPage from './Components/pages/DepartmentPage'
 
 import HCMLoginPage from './minister/pages/HCMLoginPage'
 import HCMRegisterPage from './minister/pages/HCMRegisterPage'
@@ -15,10 +14,10 @@ import HCMCasesListPage from './minister/pages/HCMCasesListPage'
 import HCMCaseDetailPage from './minister/pages/HCMCaseDetailPage'
 import HCMNewCasePage from './minister/pages/HCMNewCasePage'
 import CitizenMyCasesPage from './minister/pages/CitizenMyCasesPage'
-import WorkflowPipelinePage from './minister/pages/WorkflowPipelinePage'
 import MeetingsPage from './minister/pages/MeetingsPage'
+import { STAFF_ROLE_IDS } from './constants/adminWorkflow'
 
-const STAFF_ROLES = ["admin", "ps", "aps", "additional_ps", "staff", "official"];
+const STAFF_ROLES = STAFF_ROLE_IDS;
 
 function App() {
   const { isAuthenticated, user } = useHCMAuth();
@@ -52,19 +51,10 @@ function App() {
               <MinisterDashboard />
             </ProtectedRoute>
           } />
-          <Route path="/workflow" element={
-            <ProtectedRoute allowedRoles={STAFF_ROLES}>
-              <WorkflowPipelinePage />
-            </ProtectedRoute>
-          } />
+          <Route path="/workflow" element={<Navigate to="/dashboard" replace />} />
           <Route path="/meetings" element={
             <ProtectedRoute allowedRoles={STAFF_ROLES}>
               <MeetingsPage />
-            </ProtectedRoute>
-          } />
-          <Route path="/department" element={
-            <ProtectedRoute allowedRoles={STAFF_ROLES}>
-              <DepartmentPage />
             </ProtectedRoute>
           } />
           <Route path="/cases" element={

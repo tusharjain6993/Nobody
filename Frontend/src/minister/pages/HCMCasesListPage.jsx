@@ -30,6 +30,10 @@ const STATUS_COLORS = {
   RESOLVED: "bg-teal-50 text-teal-600 border-teal-200",
   RESOLVED_WITHOUT_MEETING: "bg-cyan-50 text-cyan-600 border-cyan-200",
   SCHEDULED: "bg-violet-50 text-violet-600 border-violet-200",
+  REOPENED: "bg-amber-50 text-amber-700 border-amber-200",
+  ESCALATED: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
+  CLOSURE_PENDING_MINISTER: "bg-indigo-50 text-indigo-600 border-indigo-200",
+  REJECTION_PENDING_MINISTER: "bg-rose-50 text-rose-600 border-rose-200",
   CLOSED: "bg-slate-100 text-slate-500 border-slate-200",
 };
 
@@ -123,10 +127,8 @@ function casesToRows(cases) {
     "Email": c.citizenSnapshot?.email || "",
     "Purpose": c.purpose || "",
     "Category": c.category || "",
-    "Referral Person": c.referralPerson || "",
-    "State": c.state || "",
-    "District/City": c.districtCity || "",
-    "Pincode": c.pincode || "",
+    "Referred Admin": c.assignedAdminLabel || "",
+    "Current Admin": c.currentAdminLabel || "",
     "Status": (c.status || "").replace(/_/g, " "),
     "Urgency": c.urgency || "",
     "Date": c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "",
@@ -154,14 +156,14 @@ function exportToPDF(cases, viewLabel) {
   doc.setFont("helvetica", "normal");
   doc.text(`Generated: ${new Date().toLocaleString()}  |  Total: ${cases.length} cases`, 14, 21);
 
-  const headers = ["Case ID", "Citizen", "Purpose", "Category", "Referral", "Location", "Status", "Urgency", "Date"];
+  const headers = ["Case ID", "Citizen", "Purpose", "Category", "Referred Admin", "Current Admin", "Status", "Urgency", "Date"];
   const body = cases.map((c) => [
     c.caseId || "",
     c.citizenSnapshot?.name || "",
     (c.purpose || "").slice(0, 40),
     c.category || "",
-    c.referralPerson || "",
-    `${c.state || ""}, ${c.districtCity || ""}`,
+    c.assignedAdminLabel || "",
+    c.currentAdminLabel || "",
     (c.status || "").replace(/_/g, " "),
     c.urgency || "",
     c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "",
@@ -478,7 +480,7 @@ export default function HCMCasesListPage({ defaultView = "active" }) {
                       />
                     </th>
                   )}
-                  {["Case ID", "Citizen", "Purpose", "Category", "Referral", "Location", "Status", "Date", ""].map((h) => (
+                  {["Case ID", "Citizen", "Purpose", "Category", "Referred Admin", "Current Admin", "Status", "Date", ""].map((h) => (
                     <th
                       key={h}
                       className="text-left py-2.5 px-3 text-slate-400 dark:text-slate-500 font-semibold text-[0.65rem] uppercase tracking-wider border-b border-slate-200 dark:border-slate-600"
@@ -527,10 +529,8 @@ export default function HCMCasesListPage({ defaultView = "active" }) {
                         {c.purpose}
                       </td>
                       <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">{c.category}</td>
-                      <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300">{c.referralPerson}</td>
-                      <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300">
-                        {c.state}, {c.districtCity}
-                      </td>
+                      <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300">{c.assignedAdminLabel}</td>
+                      <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300">{c.currentAdminLabel}</td>
                       <td className="py-2.5 px-3">
                         <Badge label={c.status} />
                       </td>
