@@ -25,7 +25,7 @@ const inputStyle = {
 };
 
 export default function HCMNewCasePage() {
-  const [activeTab, setActiveTab] = useState("meeting");
+  const [activeTab, setActiveTab] = useState("");
   const [admins, setAdmins] = useState([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -89,22 +89,23 @@ export default function HCMNewCasePage() {
         </p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
-        <button type="button" onClick={() => setActiveTab("meeting")} style={{ ...cardStyle, padding: "1.2rem", cursor: "pointer", borderColor: activeTab === "meeting" ? "#6366f1" : "#e2e8f0", background: activeTab === "meeting" ? "#eef2ff" : "#fff" }}>
-          <div style={{ fontWeight: 900, color: "#0f172a", fontSize: "1.05rem" }}>Request Meeting</div>
-          <div style={{ color: "#64748b", marginTop: "0.35rem", fontSize: "0.9rem" }}>Purpose, optional document, admin referral, and status tracking.</div>
-        </button>
-        <button type="button" onClick={() => setActiveTab("complaint")} style={{ ...cardStyle, padding: "1.2rem", cursor: "pointer", borderColor: activeTab === "complaint" ? "#6366f1" : "#e2e8f0", background: activeTab === "complaint" ? "#eef2ff" : "#fff" }}>
-          <div style={{ fontWeight: 900, color: "#0f172a", fontSize: "1.05rem" }}>Submit Complaint</div>
-          <div style={{ color: "#64748b", marginTop: "0.35rem", fontSize: "0.9rem" }}>Documents supported: PDF, image, Excel up to 50 MB each.</div>
-        </button>
-      </div>
-
       {error && <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1rem", background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", borderRadius: "12px", padding: "0.85rem 1rem" }}><ErrorCircleRegular style={{ fontSize: 18 }} /> <span>{error}</span></div>}
       {success && <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1rem", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", borderRadius: "12px", padding: "0.85rem 1rem" }}><CheckmarkCircleRegular style={{ fontSize: 18 }} /> <span>{success}</span></div>}
 
-      {activeTab === "meeting" ? (
+      {!activeTab ? (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+          <button type="button" onClick={() => setActiveTab("meeting")} style={{ ...cardStyle, padding: "1.2rem", cursor: "pointer" }}>
+            <div style={{ fontWeight: 900, color: "#0f172a", fontSize: "1.05rem" }}>Request Meeting</div>
+            <div style={{ color: "#64748b", marginTop: "0.35rem", fontSize: "0.9rem" }}>Purpose, optional document, admin referral, and status tracking.</div>
+          </button>
+          <button type="button" onClick={() => setActiveTab("complaint")} style={{ ...cardStyle, padding: "1.2rem", cursor: "pointer" }}>
+            <div style={{ fontWeight: 900, color: "#0f172a", fontSize: "1.05rem" }}>Submit Complaint</div>
+            <div style={{ color: "#64748b", marginTop: "0.35rem", fontSize: "0.9rem" }}>Documents supported: PDF, image, Excel up to 50 MB each.</div>
+          </button>
+        </div>
+      ) : activeTab === "meeting" ? (
         <form onSubmit={submitMeeting} style={cardStyle}>
+          <button type="button" onClick={() => { setActiveTab(""); setError(""); setSuccess(""); }} style={{ marginBottom: "1rem", background: "transparent", border: "none", padding: 0, color: "#4f46e5", fontWeight: 700, cursor: "pointer" }}>← Back to Services</button>
           <h2 style={{ marginTop: 0, color: "#0f172a" }}>Meeting Request</h2>
           <div style={{ display: "grid", gap: "1rem" }}>
             <div>
@@ -129,6 +130,7 @@ export default function HCMNewCasePage() {
         </form>
       ) : (
         <form onSubmit={submitComplaint} style={cardStyle}>
+          <button type="button" onClick={() => { setActiveTab(""); setError(""); setSuccess(""); }} style={{ marginBottom: "1rem", background: "transparent", border: "none", padding: 0, color: "#4f46e5", fontWeight: 700, cursor: "pointer" }}>← Back to Services</button>
           <h2 style={{ marginTop: 0, color: "#0f172a" }}>Complaint Submission</h2>
           <div style={{ display: "grid", gap: "1rem" }}>
             <div>
