@@ -154,6 +154,12 @@
   background: rgba(239, 68, 68, 0.05);
 }
 
+.auth-input--readonly {
+  background: rgba(148, 163, 184, 0.12);
+  color: #e2e8f0;
+  cursor: not-allowed;
+}
+
 .auth-btn {
   width: 100%;
   padding: 0.75rem;

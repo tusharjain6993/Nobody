@@ -2,15 +2,22 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CheckmarkCircleRegular, ErrorCircleRegular, PersonRegular } from "@fluentui/react-icons";
 import { authApi } from "../ministerApi";
+import { filesToDocuments } from "../../utils/fileHelpers";
+import { lookupCitizenPin } from "../../constants/indiaCitizenPinData";
 import "./authPages.css";
 
 const EMPTY_FORM = {
   name: "",
   email: "",
   aadhaar: "",
+  age: "",
+  gender: "",
   phonePrimary: "",
-  phoneSecondary: "",
-  phoneTertiary: "",
+  pinCode: "",
+  state: "",
+  city: "",
+  mpName: "",
+  photo: null,
 };
 
 export default function HCMRegisterPage() {
@@ -23,14 +30,13 @@ export default function HCMRegisterPage() {
 
   const validate = () => {
     const nextErrors = {};
-    const phones = [form.phonePrimary, form.phoneSecondary, form.phoneTertiary].filter(Boolean);
     if (!form.name.trim()) nextErrors.name = "Full name is required";
     if (!form.aadhaar || !/^\d{12}$/.test(form.aadhaar)) nextErrors.aadhaar = "Aadhaar must be 12 digits";
-    if (phones.length === 0) nextErrors.phonePrimary = "At least one mobile number is required";
-    phones.forEach((phone, index) => {
-      const fieldKey = ["phonePrimary", "phoneSecondary", "phoneTertiary"][index];
-      if (!/^[6-9]\d{9}$/.test(phone)) nextErrors[fieldKey] = "Each mobile number must be a valid 10-digit number";
-    });
+    if (!form.age || Number(form.age) < 18 || Number(form.age) > 120) nextErrors.age = "Age must be between 18 and 120";
+    if (!form.gender) nextErrors.gender = "Gender is required";
+    if (!/^[6-9]\d{9}$/.test(form.phonePrimary)) nextErrors.phonePrimary = "Mobile number must be a valid 10-digit number";
+    if (!/^\d{6}$/.test(form.pinCode)) nextErrors.pinCode = "PIN code must be 6 digits";
+    if (!form.state || !form.city || !form.mpName) nextErrors.pinCode = "Use a supported Delhi or Rajasthan PIN code";
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -44,7 +50,8 @@ export default function HCMRegisterPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await authApi.register(form);
+      const [photo] = await filesToDocuments(form.photo ? [form.photo] : []);
+      const res = await authApi.register({ ...form, photo: photo || null });
       setCitizenId(res.citizenUniqueId);
       alert(`Citizen ID generated: ${res.citizenUniqueId}`);
     } catch (err) {
@@ -80,6 +87,19 @@ export default function HCMRegisterPage() {
     setError("");
   };
   const onPhoneChange = (field, value) => setField(field, value.replace(/\D/g, "").slice(0, 10));
+  const onPinCodeChange = (value) => {
+    const pinCode = value.replace(/\D/g, "").slice(0, 6);
+    const pinMeta = lookupCitizenPin(pinCode);
+    setForm((current) => ({
+      ...current,
+      pinCode,
+      state: pinMeta?.state || "",
+      city: pinMeta?.city || "",
+      mpName: pinMeta?.mp || "",
+    }));
+    setErrors((current) => ({ ...current, pinCode: "" }));
+    setError("");
+  };
 
   return (
     <div className="auth-page">
@@ -114,21 +134,53 @@ export default function HCMRegisterPage() {
           </div>
 
           <div className="auth-field-group">
-            <label className="auth-label">MOBILE NUMBER 1</label>
+            <label className="auth-label">AGE</label>
+            <input value={form.age} onChange={(event) => setField("age", event.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="18-120" className={inputClass("age")} />
+            {errors.age && <p className="auth-error" style={{ marginTop: "0.4rem", marginBottom: 0, padding: "0.45rem 0.7rem", fontSize: "0.8rem" }}>{errors.age}</p>}
+          </div>
+
+          <div className="auth-field-group">
+            <label className="auth-label">GENDER</label>
+            <select value={form.gender} onChange={(event) => setField("gender", event.target.value)} className={inputClass("gender")}>
+              <option value="">Select gender</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+            {errors.gender && <p className="auth-error" style={{ marginTop: "0.4rem", marginBottom: 0, padding: "0.45rem 0.7rem", fontSize: "0.8rem" }}>{errors.gender}</p>}
+          </div>
+
+          <div className="auth-field-group">
+            <label className="auth-label">MOBILE NUMBER</label>
             <input value={form.phonePrimary} onChange={(event) => onPhoneChange("phonePrimary", event.target.value)} placeholder="Required" className={inputClass("phonePrimary")} />
             {errors.phonePrimary && <p className="auth-error" style={{ marginTop: "0.4rem", marginBottom: 0, padding: "0.45rem 0.7rem", fontSize: "0.8rem" }}>{errors.phonePrimary}</p>}
           </div>
 
           <div className="auth-field-group">
-            <label className="auth-label">MOBILE NUMBER 2</label>
-            <input value={form.phoneSecondary} onChange={(event) => onPhoneChange("phoneSecondary", event.target.value)} placeholder="Optional" className={inputClass("phoneSecondary")} />
-            {errors.phoneSecondary && <p className="auth-error" style={{ marginTop: "0.4rem", marginBottom: 0, padding: "0.45rem 0.7rem", fontSize: "0.8rem" }}>{errors.phoneSecondary}</p>}
+            <label className="auth-label">PIN CODE</label>
+            <input value={form.pinCode} onChange={(event) => onPinCodeChange(event.target.value)} placeholder="Delhi or Rajasthan PIN" className={inputClass("pinCode")} />
+            {errors.pinCode && <p className="auth-error" style={{ marginTop: "0.4rem", marginBottom: 0, padding: "0.45rem 0.7rem", fontSize: "0.8rem" }}>{errors.pinCode}</p>}
+          </div>
+
+          <div className="auth-field-group">
+            <label className="auth-label">STATE</label>
+            <input value={form.state} readOnly placeholder="Auto-filled from PIN" className="auth-input auth-input--readonly" />
+          </div>
+
+          <div className="auth-field-group">
+            <label className="auth-label">CITY</label>
+            <input value={form.city} readOnly placeholder="Auto-filled from PIN" className="auth-input auth-input--readonly" />
+          </div>
+
+          <div className="auth-field-group">
+            <label className="auth-label">MP FOR THIS CITY</label>
+            <input value={form.mpName} readOnly placeholder="Auto-filled from PIN" className="auth-input auth-input--readonly" />
           </div>
 
           <div className="auth-field-group auth-field-group--last">
-            <label className="auth-label">MOBILE NUMBER 3</label>
-            <input value={form.phoneTertiary} onChange={(event) => onPhoneChange("phoneTertiary", event.target.value)} placeholder="Optional" className={inputClass("phoneTertiary")} />
-            {errors.phoneTertiary && <p className="auth-error" style={{ marginTop: "0.4rem", marginBottom: 0, padding: "0.45rem 0.7rem", fontSize: "0.8rem" }}>{errors.phoneTertiary}</p>}
+            <label className="auth-label">PHOTO UPLOAD</label>
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setField("photo", event.target.files?.[0] || null)} className="auth-input" />
+            {form.photo && <p className="auth-subtitle" style={{ marginTop: "0.5rem" }}>{form.photo.name}</p>}
           </div>
 
           <button type="submit" disabled={loading} className="auth-btn">{loading ? "Generating…" : "Generate Citizen ID →"}</button>

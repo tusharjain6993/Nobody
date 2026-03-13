@@ -2,7 +2,7 @@ import initSqlJs from "sql.js";
 
 const DB_STORAGE_KEY = "hcm_demo_sqlite_v3";
 const DB_SCHEMA_VERSION_KEY = "hcm_demo_schema_version";
-const DB_SCHEMA_VERSION = "9";
+const DB_SCHEMA_VERSION = "10";
 
 let db = null;
 let dbPromise = null;
@@ -48,6 +48,8 @@ function isSchemaCompatible() {
     const requiredChecks = [
       ["users", "phoneNumbers"],
       ["users", "citizenId"],
+      ["users", "pinCode"],
+      ["users", "photoData"],
       ["meeting_requests", "meetingDocket"],
       ["meeting_requests", "assignedAdminUserId"],
       ["complaints", "resolutionDocs"],
@@ -121,6 +123,15 @@ function runSchema() {
     phoneSecondary TEXT DEFAULT '',
     phoneTertiary TEXT DEFAULT '',
     phoneNumbers TEXT NOT NULL DEFAULT '[]',
+    age INTEGER,
+    gender TEXT DEFAULT '',
+    pinCode TEXT DEFAULT '',
+    state TEXT DEFAULT '',
+    city TEXT DEFAULT '',
+    mpName TEXT DEFAULT '',
+    photoName TEXT DEFAULT '',
+    photoType TEXT DEFAULT '',
+    photoData TEXT DEFAULT '',
     citizenId TEXT UNIQUE,
     role TEXT NOT NULL,
     department TEXT DEFAULT '',
@@ -293,7 +304,13 @@ function runSeeds() {
       role: "citizen",
       aadhaar: "123412341234",
       citizenId: "CTZ-HP-000001",
-      phoneNumbers: ["9876543210", "9876500000"],
+      phoneNumbers: ["9876543210"],
+      age: 32,
+      gender: "Male",
+      pinCode: "302001",
+      state: "Rajasthan",
+      city: "Jaipur",
+      mpName: "Manju Sharma",
       department: "",
     },
     {
@@ -304,6 +321,12 @@ function runSeeds() {
       aadhaar: "345678901234",
       citizenId: "CTZ-HP-000002",
       phoneNumbers: ["9876543215"],
+      age: 28,
+      gender: "Male",
+      pinCode: "110001",
+      state: "Delhi",
+      city: "New Delhi",
+      mpName: "Bansuri Swaraj",
       department: "",
     },
   ];
@@ -312,8 +335,8 @@ function runSeeds() {
     const phones = user.phoneNumbers || [];
     db.run(
       `INSERT INTO users (
-        name,email,password,aadhaar,phonePrimary,phoneSecondary,phoneTertiary,phoneNumbers,citizenId,role,department,isVerified,createdAt,updatedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        name,email,password,aadhaar,phonePrimary,phoneSecondary,phoneTertiary,phoneNumbers,age,gender,pinCode,state,city,mpName,photoName,photoType,photoData,citizenId,role,department,isVerified,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         user.name,
         user.email,
@@ -323,6 +346,15 @@ function runSeeds() {
         phones[1] || "",
         phones[2] || "",
         JSON.stringify(phones),
+        user.age || null,
+        user.gender || "",
+        user.pinCode || "",
+        user.state || "",
+        user.city || "",
+        user.mpName || "",
+        user.photoName || "",
+        user.photoType || "",
+        user.photoData || "",
         user.citizenId || null,
         user.role,
         user.department || "",

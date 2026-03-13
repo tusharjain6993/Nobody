@@ -40,7 +40,7 @@ function parseJson(value, fallback) {
 }
 
 function normalizePhones(payload = {}) {
-  const phones = [payload.phonePrimary, payload.phoneSecondary, payload.phoneTertiary]
+  const phones = [payload.phonePrimary]
     .map((phone) => String(phone || "").replace(/\D/g, ""))
     .filter(Boolean);
   return Array.from(new Set(phones));
@@ -57,6 +57,12 @@ function getCitizenSnapshot(user) {
     citizenId: user.citizenId,
     aadhaar: maskAadhaar(user.aadhaar),
     phoneNumbers: parseJson(user.phoneNumbers, []),
+    age: user.age || null,
+    gender: user.gender || "",
+    pinCode: user.pinCode || "",
+    state: user.state || "",
+    city: user.city || "",
+    mpName: user.mpName || "",
   };
 }
 
@@ -198,11 +204,22 @@ export const authApi = {
     const email = String(body.email || "").trim().toLowerCase();
     const aadhaar = String(body.aadhaar || "").replace(/\D/g, "");
     const phones = normalizePhones(body);
+    const age = Number(body.age || 0);
+    const gender = String(body.gender || "").trim();
+    const pinCode = String(body.pinCode || "").replace(/\D/g, "");
+    const state = String(body.state || "").trim();
+    const city = String(body.city || "").trim();
+    const mpName = String(body.mpName || "").trim();
+    const photo = body.photo || null;
 
     if (!name) throw new Error("Name is required");
     if (!aadhaar || !/^\d{12}$/.test(aadhaar)) throw new Error("Aadhaar must be exactly 12 digits");
-    if (phones.length === 0 || phones.length > 3) throw new Error("Provide between 1 and 3 phone numbers");
-    if (phones.some((phone) => !/^[6-9]\d{9}$/.test(phone))) throw new Error("Phone numbers must be valid 10-digit mobile numbers");
+    if (phones.length !== 1) throw new Error("Exactly one mobile number is required");
+    if (phones.some((phone) => !/^[6-9]\d{9}$/.test(phone))) throw new Error("Phone number must be a valid 10-digit mobile number");
+    if (!Number.isInteger(age) || age < 18 || age > 120) throw new Error("Age must be between 18 and 120");
+    if (!gender) throw new Error("Gender is required");
+    if (!/^\d{6}$/.test(pinCode)) throw new Error("PIN code must be exactly 6 digits");
+    if (!state || !city || !mpName) throw new Error("State, city, and MP must be populated from the PIN code");
 
     const existing = queryOne("SELECT id FROM users WHERE aadhaar = ?", [aadhaar]);
     if (existing) throw new Error("A citizen is already registered with this Aadhaar");
@@ -211,8 +228,8 @@ export const authApi = {
     const now = ts();
     execute(
       `INSERT INTO users (
-        name,email,password,aadhaar,phonePrimary,phoneSecondary,phoneTertiary,phoneNumbers,citizenId,role,department,isVerified,createdAt,updatedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
+        name,email,password,aadhaar,phonePrimary,phoneSecondary,phoneTertiary,phoneNumbers,age,gender,pinCode,state,city,mpName,photoName,photoType,photoData,citizenId,role,department,isVerified,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?,1,?,?)`,
       [
         name,
         email || `${citizenId.toLowerCase()}@demo.local`,
@@ -222,6 +239,15 @@ export const authApi = {
         phones[1] || "",
         phones[2] || "",
         JSON.stringify(phones),
+        age,
+        gender,
+        pinCode,
+        state,
+        city,
+        mpName,
+        photo?.name || "",
+        photo?.type || "",
+        photo?.data || "",
         citizenId,
         "citizen",
         "",
@@ -269,7 +295,6 @@ export const citizenApi = {
     const referralAdminUserId = Number(body.referralAdminUserId || 0);
     const referralAdmin = queryOne("SELECT * FROM users WHERE id = ? AND role = 'admin'", [referralAdminUserId]);
     if (!purpose) throw new Error("Purpose of meeting is required");
-    if (!referralAdmin) throw new Error("Select an admin referral");
     const now = ts();
     const requestId = nextCode("MREQ", "meeting_requests");
     execute(
@@ -281,8 +306,8 @@ export const citizenApi = {
         Number(user.id),
         JSON.stringify(getCitizenSnapshot(dbUser)),
         purpose,
-        referralAdminUserId,
-        referralAdmin.name,
+        referralAdmin ? referralAdminUserId : null,
+        referralAdmin?.name || "",
         body.attachment?.name || "",
         body.attachment?.type || "",
         body.attachment?.data || "",
