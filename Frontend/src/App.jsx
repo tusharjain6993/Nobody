@@ -16,6 +16,7 @@ import CitizenMyCasesPage from "./minister/pages/CitizenMyCasesPage";
 import MeetingsPage from "./minister/pages/MeetingsPage";
 import MinisterDashboardPage from "./minister/pages/MinisterDashboardPage";
 import MinisterCalendarPage from "./minister/pages/MinisterCalendarPage";
+import AdminCalendarPage from "./minister/pages/AdminCalendarPage";
 
 function App() {
   const { isAuthenticated, user } = useHCMAuth();
@@ -64,6 +65,14 @@ function App() {
             element={(
               <ProtectedRoute allowedRoles={["minister"]}>
                 <MinisterCalendarPage />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/calendar"
+            element={(
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminCalendarPage />
               </ProtectedRoute>
             )}
           />

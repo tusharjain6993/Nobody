@@ -65,7 +65,9 @@ export default function CitizenMyCasesPage() {
                 {complaint.details}
                 {complaint.department && <div style={{ marginTop: "0.55rem" }}>Department: {complaint.department}</div>}
                 {complaint.callOutcome && <div style={{ marginTop: "0.35rem" }}>Call outcome: {complaint.callOutcome}</div>}
+                {complaint.resolutionSummary && <div style={{ marginTop: "0.35rem" }}>Resolution summary: {complaint.resolutionSummary}</div>}
                 {complaint.resolutionDocs?.length > 0 && <div style={{ marginTop: "0.35rem" }}>Resolution documents: {complaint.resolutionDocs.map((doc) => doc.name).join(", ")}</div>}
+                {complaint.status === "completed" && <div style={{ marginTop: "0.35rem", color: "#166534", fontWeight: 700 }}>Case closed after resolution.</div>}
                 {complaint.escalatedMeetingRequestId && <div style={{ marginTop: "0.35rem" }}>Escalated to admin meeting flow.</div>}
               </div>
             </Card>

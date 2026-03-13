@@ -24,6 +24,8 @@ const Header = () => {
 
   const pageTitle = location.pathname.startsWith("/dashboard")
     ? "Productivity Dashboard"
+    : location.pathname.startsWith("/calendar")
+      ? "Admin Calendar"
     : location.pathname.startsWith("/minister/dashboard")
       ? "Minister Dashboard"
       : location.pathname.startsWith("/minister/calendar")

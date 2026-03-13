@@ -27,7 +27,7 @@ export default function HCMCaseDetailPage() {
   const [verificationOutcome, setVerificationOutcome] = useState("");
   const [schedule, setSchedule] = useState({ scheduleDate: "", scheduleTime: "", scheduleLocation: "", adminNotes: "" });
   const [rejectReason, setRejectReason] = useState("");
-  const [complaintForm, setComplaintForm] = useState({ department: "", officerName: "", officerContact: "", manualContact: "", callScheduledAt: "", callOutcome: "", escalationPurpose: "" });
+  const [complaintForm, setComplaintForm] = useState({ department: "", officerName: "", officerContact: "", manualContact: "", callScheduledAt: "", callOutcome: "", escalationPurpose: "", resolutionSummary: "" });
   const [resolutionFiles, setResolutionFiles] = useState([]);
 
   const matchingContacts = useMemo(
@@ -55,6 +55,7 @@ export default function HCMCaseDetailPage() {
               manualContact: res.complaint.manualContact || "",
               callScheduledAt: res.complaint.callScheduledAt || "",
               callOutcome: res.complaint.callOutcome || "",
+              resolutionSummary: res.complaint.resolutionSummary || "",
             }));
           }
         }
@@ -89,7 +90,8 @@ export default function HCMCaseDetailPage() {
 
   const complaintAssignedToCurrentAdmin = itemType === "complaint" && Number(item.assignedAdminUserId || 0) === Number(user?.id || 0);
   const complaintUnassigned = itemType === "complaint" && !item.assignedAdminUserId;
-  const canShowComplaintActions = complaintAssignedToCurrentAdmin;
+  const complaintResolved = itemType === "complaint" && ["resolved", "completed"].includes(item.status);
+  const canShowComplaintActions = complaintAssignedToCurrentAdmin && !complaintResolved;
   const canReviewMeeting = itemType === "meeting" && ["submitted", "under_review", "verification_completed", "verification_needed"].includes(item.status);
   const canScheduleMeeting = itemType === "meeting" && ["approved", "scheduled"].includes(item.status);
 
@@ -192,6 +194,28 @@ export default function HCMCaseDetailPage() {
             </Section>
           )}
 
+          {complaintAssignedToCurrentAdmin && complaintResolved && (
+            <Section title={item.status === "completed" ? "Completed Case" : "Resolved Case"}>
+              <div className="space-y-3 text-sm text-slate-600">
+                <p>This complaint is now read-only. The citizen has already received the resolved case update.</p>
+                {item.resolutionSummary && <div><span className="font-semibold text-slate-900">Resolution summary:</span> {item.resolutionSummary}</div>}
+                {item.resolutionDocs?.length > 0 && <div><span className="font-semibold text-slate-900">Resolution files:</span> {item.resolutionDocs.map((doc) => doc.name).join(", ")}</div>}
+                {item.status === "resolved" && (
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      disabled={actionLoading}
+                      onClick={() => runAction(() => workItemsApi.closeComplaintCase(id))}
+                      className="px-4 py-2 rounded-lg bg-slate-900 text-white font-semibold text-sm"
+                    >
+                      Close This Case
+                    </button>
+                  </div>
+                )}
+              </div>
+            </Section>
+          )}
+
           {canShowComplaintActions && (
           <Section title="Department Contact Flow">
             <div className="grid md:grid-cols-2 gap-3">
@@ -234,12 +258,13 @@ export default function HCMCaseDetailPage() {
 
           {canShowComplaintActions && (
           <Section title="Resolve or Escalate">
+            <textarea value={complaintForm.resolutionSummary} onChange={(event) => setComplaintForm((current) => ({ ...current, resolutionSummary: event.target.value }))} rows={3} placeholder="Resolution reason / summary" className={`${inputClass} mb-3`} />
             <input type="file" multiple onChange={(event) => setResolutionFiles(Array.from(event.target.files || []))} className={inputClass} />
             <div className="mt-3 flex gap-2 flex-wrap">
               <button
                 type="button"
                 disabled={actionLoading}
-                onClick={() => runAction(async () => workItemsApi.resolveComplaint(id, { resolutionDocs: await filesToDocuments(resolutionFiles) }))}
+                onClick={() => runAction(async () => workItemsApi.resolveComplaint(id, { resolutionSummary: complaintForm.resolutionSummary, resolutionDocs: await filesToDocuments(resolutionFiles) }))}
                 className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-sm"
               >
                 Resolve Complaint

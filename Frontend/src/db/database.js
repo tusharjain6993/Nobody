@@ -2,7 +2,7 @@ import initSqlJs from "sql.js";
 
 const DB_STORAGE_KEY = "hcm_demo_sqlite_v3";
 const DB_SCHEMA_VERSION_KEY = "hcm_demo_schema_version";
-const DB_SCHEMA_VERSION = "7";
+const DB_SCHEMA_VERSION = "9";
 
 let db = null;
 let dbPromise = null;
@@ -49,7 +49,9 @@ function isSchemaCompatible() {
       ["users", "phoneNumbers"],
       ["users", "citizenId"],
       ["meeting_requests", "meetingDocket"],
+      ["meeting_requests", "assignedAdminUserId"],
       ["complaints", "resolutionDocs"],
+      ["complaints", "resolutionSummary"],
       ["calendar_events", "productivityScore"],
       ["calendar_events", "documents"],
       ["notifications", "link"],
@@ -154,6 +156,8 @@ function runSchema() {
     purpose TEXT NOT NULL,
     referralAdminUserId INTEGER,
     referralAdminName TEXT NOT NULL,
+    assignedAdminUserId INTEGER,
+    assignedAdminName TEXT DEFAULT '',
     attachmentName TEXT DEFAULT '',
     attachmentType TEXT DEFAULT '',
     attachmentData TEXT DEFAULT '',
@@ -180,6 +184,7 @@ function runSchema() {
     details TEXT NOT NULL,
     attachments TEXT NOT NULL DEFAULT '[]',
     resolutionDocs TEXT NOT NULL DEFAULT '[]',
+    resolutionSummary TEXT DEFAULT '',
     status TEXT NOT NULL DEFAULT 'pooled',
     assignedAdminUserId INTEGER,
     assignedAdminName TEXT DEFAULT '',
@@ -361,13 +366,15 @@ function runSeeds() {
 
   db.run(
     `INSERT INTO meeting_requests (
-      requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleLocation,visitorId,meetingDocket,adminNotes,escalatedFromComplaintId,createdAt,updatedAt
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,assignedAdminUserId,assignedAdminName,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleLocation,visitorId,meetingDocket,adminNotes,escalatedFromComplaintId,createdAt,updatedAt
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       "MREQ-000001",
       4,
       JSON.stringify({ name: "Citizen User", citizenId: "CTZ-HP-000001", aadhaar: "123412341234", phoneNumbers: ["9876543210", "9876500000"] }),
       "Discussion on cultural scholarship release",
+      1,
+      "Admin Demo",
       1,
       "Admin Demo",
       "",

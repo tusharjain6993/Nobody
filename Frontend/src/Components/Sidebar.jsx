@@ -43,6 +43,7 @@ function Sidebar({ collapsed, onToggle }) {
             <>
               <SidebarItem type="NavLink" to="/dashboard" icon={DataBarVerticalRegular} label="Dashboard" collapsed={collapsed} />
               <SidebarItem type="NavLink" to="/cases" icon={GavelRegular} label="Work Queue" collapsed={collapsed} />
+              <SidebarItem type="NavLink" to="/calendar" icon={CalendarLtrRegular} label="Calendar" collapsed={collapsed} />
               <SidebarItem type="NavLink" to="/meetings" icon={CalendarLtrRegular} label="Meetings" collapsed={collapsed} />
             </>
           )}

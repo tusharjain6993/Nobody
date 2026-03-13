@@ -22,26 +22,29 @@ export default function HCMCasesListPage() {
   const rows = useMemo(() => {
     let list = [];
     if (tab === "complaints") {
-      list = data.complaints.filter((item) => !item.assignedAdminUserId);
+      list = data.complaints.filter((item) => !item.assignedAdminUserId && !["completed"].includes(item.status));
     } else if (tab === "meetings") {
       list = data.meetingRequests.filter((item) => !["scheduled", "rejected"].includes(item.status));
     } else if (tab === "myCases") {
-      const myComplaints = data.complaints.filter((item) => Number(item.assignedAdminUserId || 0) === Number(data.myAdminId || 0));
+      const myComplaints = data.complaints.filter((item) => Number(item.assignedAdminUserId || 0) === Number(data.myAdminId || 0) && item.status !== "completed");
       const myMeetings = data.meetingRequests.filter((item) => Number(item.referralAdminUserId || 0) === Number(data.myAdminId || 0) && !["scheduled", "rejected"].includes(item.status));
       list = [...myComplaints, ...myMeetings];
     } else if (tab === "rejectedMeetings") {
       list = data.meetingRequests.filter((item) => item.status === "rejected");
+    } else if (tab === "completedCases") {
+      list = data.complaints.filter((item) => item.status === "completed");
     }
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((item) => JSON.stringify(item).toLowerCase().includes(q));
   }, [data, tab, search]);
 
-  const complaintQueueCount = data.complaints.filter((item) => !item.assignedAdminUserId).length;
+  const complaintQueueCount = data.complaints.filter((item) => !item.assignedAdminUserId && item.status !== "completed").length;
   const meetingQueueCount = data.meetingRequests.filter((item) => !["scheduled", "rejected"].includes(item.status)).length;
-  const myCaseCount = data.complaints.filter((item) => Number(item.assignedAdminUserId || 0) === Number(data.myAdminId || 0)).length
+  const myCaseCount = data.complaints.filter((item) => Number(item.assignedAdminUserId || 0) === Number(data.myAdminId || 0) && item.status !== "completed").length
     + data.meetingRequests.filter((item) => Number(item.referralAdminUserId || 0) === Number(data.myAdminId || 0) && !["scheduled", "rejected"].includes(item.status)).length;
   const rejectedMeetingCount = data.meetingRequests.filter((item) => item.status === "rejected").length;
+  const completedCaseCount = data.complaints.filter((item) => item.status === "completed").length;
 
   return (
     <div className="p-6 max-w-[1240px] mx-auto">
@@ -66,6 +69,7 @@ export default function HCMCasesListPage() {
           ["meetings", `Meeting Request Queue (${meetingQueueCount})`],
           ["myCases", `My Case Bucket (${myCaseCount})`],
           ["rejectedMeetings", `Rejected Meetings (${rejectedMeetingCount})`],
+          ["completedCases", `Completed Cases (${completedCaseCount})`],
         ].map(([id, label]) => (
           <button
             key={id}

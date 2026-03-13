@@ -5,6 +5,23 @@ function ts() {
   return new Date().toISOString();
 }
 
+function localDatePart(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function localTimePart(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
 function getCurrentUser() {
   try {
     return JSON.parse(localStorage.getItem("hcm_user"));
@@ -127,6 +144,16 @@ function buildCalendarEvent(row) {
     photos: parseJson(row.photos, []),
     documents: parseJson(row.documents, []),
   };
+}
+
+function buildMeetingCalendarDetails(meeting) {
+  const parts = [
+    `Citizen: ${meeting.citizenSnapshot?.name || "Citizen"}`,
+    `Visitor ID: ${meeting.visitorId || "Pending"}`,
+    `Docket: ${meeting.meetingDocket || "Pending"}`,
+  ];
+  if (meeting.adminNotes) parts.push(meeting.adminNotes);
+  return parts.join(" · ");
 }
 
 export const authApi = {
@@ -514,13 +541,29 @@ export const workItemsApi = {
   resolveComplaint: async (id, payload) => {
     await getDb();
     const user = requireRole("admin");
+    const resolutionSummary = String(payload.resolutionSummary || "").trim();
+    if (!resolutionSummary && !(payload.resolutionDocs || []).length) {
+      throw new Error("Provide a resolution reason or upload resolution documents");
+    }
     execute(
-      "UPDATE complaints SET status='resolved', resolutionDocs=?, updatedAt=? WHERE id=?",
-      [JSON.stringify(payload.resolutionDocs || []), ts(), Number(id)]
+      "UPDATE complaints SET status='resolved', resolutionDocs=?, resolutionSummary=?, updatedAt=? WHERE id=?",
+      [JSON.stringify(payload.resolutionDocs || []), resolutionSummary, ts(), Number(id)]
     );
     const row = queryOne("SELECT * FROM complaints WHERE id = ?", [Number(id)]);
-    addLog("complaint", id, "Complaint resolved", "Resolution documents added", user);
+    addLog("complaint", id, "Complaint resolved", resolutionSummary || "Resolution documents added", user);
     addNotificationForUsers([row.citizenId], "Complaint Submitted", `Complaint ${row.complaintId} has been resolved.`, "");
+    return workItemsApi.getComplaint(id);
+  },
+
+  closeComplaintCase: async (id) => {
+    await getDb();
+    const user = requireRole("admin");
+    const row = queryOne("SELECT * FROM complaints WHERE id = ?", [Number(id)]);
+    if (!row) throw new Error("Complaint not found");
+    if (row.status !== "resolved") throw new Error("Only resolved complaints can be closed");
+    execute("UPDATE complaints SET status='completed', updatedAt=? WHERE id=?", [ts(), Number(id)]);
+    addLog("complaint", id, "Case closed", "Complaint moved to completed cases", user);
+    addNotificationForUsers([row.citizenId], "Complaint Submitted", `Complaint ${row.complaintId} has been closed after resolution.`, "");
     return workItemsApi.getComplaint(id);
   },
 
@@ -823,7 +866,7 @@ export const ministerViewApi = {
         sourceKind: "minister_meeting",
         sourceId: meeting._id,
         title: meeting.purpose,
-        details: `Citizen: ${meeting.citizenSnapshot?.name || "Citizen"} · Visitor ID: ${meeting.visitorId || "Pending"} · Docket: ${meeting.meetingDocket || "Pending"}`,
+        details: buildMeetingCalendarDetails(meeting),
         type: "Minister Meeting",
         startsAt: `${meeting.scheduleDate}T${meeting.scheduleTime || "09:00"}`,
         endsAt: `${meeting.scheduleDate}T${meeting.scheduleTime || "09:30"}`,
@@ -861,15 +904,15 @@ export const ministerViewApi = {
       );
     } else if (sourceKind === "minister_meeting") {
       const startsAt = new Date(payload.startsAt);
-      const endsAt = new Date(payload.endsAt || payload.startsAt);
+      if (Number.isNaN(startsAt.getTime())) throw new Error("A valid meeting start time is required");
       execute(
         `UPDATE meeting_requests
          SET purpose=?, scheduleDate=?, scheduleTime=?, scheduleLocation=?, adminNotes=?, updatedAt=?
          WHERE id=?`,
         [
           String(payload.title || "").trim(),
-          startsAt.toISOString().slice(0, 10),
-          startsAt.toTimeString().slice(0, 5),
+          localDatePart(startsAt),
+          localTimePart(startsAt),
           String(payload.location || "").trim(),
           String(payload.details || "").trim(),
           ts(),
@@ -881,5 +924,64 @@ export const ministerViewApi = {
     }
 
     return ministerViewApi.calendar();
+  },
+};
+
+export const adminViewApi = {
+  calendar: async () => {
+    await getDb();
+    const user = requireRole("admin");
+    const meetings = queryAll(
+      "SELECT * FROM meeting_requests WHERE status='scheduled' AND referralAdminUserId=? ORDER BY scheduleDate ASC, scheduleTime ASC",
+      [Number(user.id)]
+    ).map(buildMeetingRequest);
+
+    const calendarItems = meetings.map((meeting) => ({
+      id: `meeting-${meeting._id}`,
+      sourceKind: "admin_meeting",
+      sourceId: meeting._id,
+      title: meeting.purpose,
+      details: buildMeetingCalendarDetails(meeting),
+      type: "Scheduled Meeting",
+      startsAt: `${meeting.scheduleDate}T${meeting.scheduleTime || "09:00"}`,
+      endsAt: `${meeting.scheduleDate}T${meeting.scheduleTime || "09:30"}`,
+      location: meeting.scheduleLocation || "",
+      source: "My Scheduled Meetings",
+    }));
+
+    return { calendarItems };
+  },
+
+  updateCalendarItem: async (payload) => {
+    await getDb();
+    const user = requireRole("admin");
+    const sourceId = Number(payload?.sourceId || 0);
+    if (!sourceId) throw new Error("Meeting reference is required");
+
+    const existing = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [sourceId]);
+    if (!existing) throw new Error("Meeting not found");
+    if (Number(existing.referralAdminUserId || 0) !== Number(user.id)) {
+      throw new Error("You can only edit meetings in your own calendar");
+    }
+
+    const startsAt = new Date(payload.startsAt);
+    if (Number.isNaN(startsAt.getTime())) throw new Error("A valid meeting start time is required");
+
+    execute(
+      `UPDATE meeting_requests
+       SET purpose=?, scheduleDate=?, scheduleTime=?, scheduleLocation=?, adminNotes=?, updatedAt=?
+       WHERE id=?`,
+      [
+        String(payload.title || "").trim(),
+        localDatePart(startsAt),
+        localTimePart(startsAt),
+        String(payload.location || "").trim(),
+        String(payload.details || "").trim(),
+        ts(),
+        sourceId,
+      ]
+    );
+
+    return adminViewApi.calendar();
   },
 };
