@@ -86,18 +86,23 @@ export default function HCMLoginPage() {
 
         <form onSubmit={handleSubmit}>
           {loginAs === "citizen" ? (
-            <div className="auth-field-group auth-field-group--last">
-              <label className="auth-label" htmlFor="citizen-id">CITIZEN ID</label>
-              <input
-                id="citizen-id"
-                type="text"
-                value={citizenId}
-                onChange={(event) => setCitizenId(event.target.value.toUpperCase())}
-                placeholder="CTZ-HP-000001"
-                required
-                className="auth-input"
-              />
-            </div>
+            <>
+              <div className="auth-field-group auth-field-group--last">
+                <label className="auth-label" htmlFor="citizen-id">CITIZEN ID</label>
+                <input
+                  id="citizen-id"
+                  type="text"
+                  value={citizenId}
+                  onChange={(event) => setCitizenId(event.target.value.toUpperCase())}
+                  placeholder="CTZ-HP-000001"
+                  required
+                  className="auth-input"
+                />
+              </div>
+              <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.8rem" }}>
+                <button type="button" onClick={() => { setCitizenId("CTZ-HP-000001"); setError(""); }} className="auth-demo-btn">Use citizen demo</button>
+              </div>
+            </>
           ) : (
             <>
               <div className="auth-field-group">

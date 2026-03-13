@@ -24,14 +24,18 @@ const inputStyle = {
   background: "#fff",
 };
 
+function sanitizeSelectedFiles(fileList) {
+  return Array.from(fileList || []).filter((file) => file && typeof file.name === "string");
+}
+
 export default function HCMNewCasePage() {
   const [activeTab, setActiveTab] = useState("");
   const [admins, setAdmins] = useState([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-  const [meetingForm, setMeetingForm] = useState({ purpose: "", referralAdminUserId: "", attachment: null });
-  const [complaintForm, setComplaintForm] = useState({ title: "", details: "", files: [] });
+  const [meetingForm, setMeetingForm] = useState({ purpose: "", referralAdminUserId: "", files: [] });
+  const [complaintForm, setComplaintForm] = useState({ title: "", details: "", complaintDate: "", complaintLocation: "", complaintType: "", files: [] });
 
   useEffect(() => {
     adminDirectoryApi.list().then((res) => setAdmins(res.admins || [])).catch(() => setAdmins([]));
@@ -43,14 +47,14 @@ export default function HCMNewCasePage() {
     setError("");
     setSuccess("");
     try {
-      const attachmentDocs = await filesToDocuments(meetingForm.attachment ? [meetingForm.attachment] : []);
+      const attachmentDocs = await filesToDocuments(meetingForm.files);
       const res = await citizenApi.createMeetingRequest({
         purpose: meetingForm.purpose,
         referralAdminUserId: meetingForm.referralAdminUserId,
-        attachment: attachmentDocs[0] || null,
+        attachments: attachmentDocs,
       });
       setSuccess(`Meeting request ${res.meetingRequest.requestId} submitted`);
-      setMeetingForm({ purpose: "", referralAdminUserId: "", attachment: null });
+      setMeetingForm({ purpose: "", referralAdminUserId: "", files: [] });
     } catch (err) {
       setError(err.message || "Unable to submit meeting request");
     } finally {
@@ -69,10 +73,13 @@ export default function HCMNewCasePage() {
       const res = await citizenApi.createComplaint({
         title: complaintForm.title,
         details: complaintForm.details,
+        complaintDate: complaintForm.complaintDate,
+        complaintLocation: complaintForm.complaintLocation,
+        complaintType: complaintForm.complaintType,
         attachments,
       });
       setSuccess(`Complaint ${res.complaint.complaintId} submitted`);
-      setComplaintForm({ title: "", details: "", files: [] });
+      setComplaintForm({ title: "", details: "", complaintDate: "", complaintLocation: "", complaintType: "", files: [] });
     } catch (err) {
       setError(err.message || "Unable to submit complaint");
     } finally {
@@ -121,7 +128,8 @@ export default function HCMNewCasePage() {
             </div>
             <div>
               <label style={{ display: "block", marginBottom: "0.45rem", fontSize: "0.8rem", fontWeight: 800, color: "#334155", textTransform: "uppercase" }}>Optional Document Upload</label>
-              <input type="file" onChange={(event) => setMeetingForm((current) => ({ ...current, attachment: event.target.files?.[0] || null }))} style={inputStyle} />
+              <input type="file" multiple onChange={(event) => setMeetingForm((current) => ({ ...current, files: sanitizeSelectedFiles(event.target.files) }))} style={inputStyle} />
+              {meetingForm.files.length > 0 && <div style={{ marginTop: "0.45rem", color: "#64748b", fontSize: "0.82rem" }}>{meetingForm.files.length} file(s) selected</div>}
             </div>
           </div>
           <button type="submit" disabled={loading} style={{ marginTop: "1.5rem", width: "100%", padding: "1rem", border: "none", borderRadius: "14px", background: loading ? "#94a3b8" : "linear-gradient(135deg, #1d4ed8, #4338ca)", color: "#fff", fontWeight: 800, fontSize: "1rem", cursor: loading ? "not-allowed" : "pointer" }}>
@@ -142,8 +150,21 @@ export default function HCMNewCasePage() {
               <textarea rows={6} value={complaintForm.details} onChange={(event) => setComplaintForm((current) => ({ ...current, details: event.target.value }))} placeholder="Describe the complaint clearly" style={{ ...inputStyle, resize: "vertical" }} />
             </div>
             <div>
+              <label style={{ display: "block", marginBottom: "0.45rem", fontSize: "0.8rem", fontWeight: 800, color: "#334155", textTransform: "uppercase" }}>Complaint Date</label>
+              <input type="date" value={complaintForm.complaintDate} onChange={(event) => setComplaintForm((current) => ({ ...current, complaintDate: event.target.value }))} style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "0.45rem", fontSize: "0.8rem", fontWeight: 800, color: "#334155", textTransform: "uppercase" }}>Location</label>
+              <input value={complaintForm.complaintLocation} onChange={(event) => setComplaintForm((current) => ({ ...current, complaintLocation: event.target.value }))} placeholder="Complaint location" style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "0.45rem", fontSize: "0.8rem", fontWeight: 800, color: "#334155", textTransform: "uppercase" }}>Type</label>
+              <input value={complaintForm.complaintType} onChange={(event) => setComplaintForm((current) => ({ ...current, complaintType: event.target.value }))} placeholder="Complaint type" style={inputStyle} />
+            </div>
+            <div>
               <label style={{ display: "block", marginBottom: "0.45rem", fontSize: "0.8rem", fontWeight: 800, color: "#334155", textTransform: "uppercase" }}>Upload Documents</label>
-              <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.xls,.xlsx" onChange={(event) => setComplaintForm((current) => ({ ...current, files: Array.from(event.target.files || []) }))} style={inputStyle} />
+              <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.xls,.xlsx" onChange={(event) => setComplaintForm((current) => ({ ...current, files: sanitizeSelectedFiles(event.target.files) }))} style={inputStyle} />
+              {complaintForm.files.length > 0 && <div style={{ marginTop: "0.45rem", color: "#64748b", fontSize: "0.82rem" }}>{complaintForm.files.length} file(s) selected</div>}
             </div>
           </div>
           <button type="submit" disabled={loading} style={{ marginTop: "1.5rem", width: "100%", padding: "1rem", border: "none", borderRadius: "14px", background: loading ? "#94a3b8" : "linear-gradient(135deg, #1d4ed8, #4338ca)", color: "#fff", fontWeight: 800, fontSize: "1rem", cursor: loading ? "not-allowed" : "pointer" }}>

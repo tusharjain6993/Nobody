@@ -117,6 +117,9 @@ function buildMeetingRequest(row) {
   return {
     ...row,
     citizenSnapshot: parseJson(row.citizenSnapshot, {}),
+    attachments: parseJson(row.attachments, row.attachmentData
+      ? [{ name: row.attachmentName, type: row.attachmentType, data: row.attachmentData }]
+      : []),
     attachment: row.attachmentData
       ? { name: row.attachmentName, type: row.attachmentType, data: row.attachmentData }
       : null,
@@ -133,6 +136,9 @@ function buildComplaint(row) {
   return {
     ...row,
     citizenSnapshot: parseJson(row.citizenSnapshot, {}),
+    complaintDate: row.complaintDate || "",
+    complaintLocation: row.complaintLocation || "",
+    complaintType: row.complaintType || "",
     attachments: parseJson(row.attachments, []),
     resolutionDocs: parseJson(row.resolutionDocs, []),
     logs: queryAll(
@@ -299,8 +305,8 @@ export const citizenApi = {
     const requestId = nextCode("MREQ", "meeting_requests");
     execute(
       `INSERT INTO meeting_requests (
-        requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleLocation,visitorId,meetingDocket,adminNotes,escalatedFromComplaintId,createdAt,updatedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,attachments,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleLocation,visitorId,meetingDocket,adminNotes,escalatedFromComplaintId,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         requestId,
         Number(user.id),
@@ -308,9 +314,10 @@ export const citizenApi = {
         purpose,
         referralAdmin ? referralAdminUserId : null,
         referralAdmin?.name || "",
-        body.attachment?.name || "",
-        body.attachment?.type || "",
-        body.attachment?.data || "",
+        JSON.stringify(body.attachments || (body.attachment ? [body.attachment] : [])),
+        body.attachments?.[0]?.name || body.attachment?.name || "",
+        body.attachments?.[0]?.type || body.attachment?.type || "",
+        body.attachments?.[0]?.data || body.attachment?.data || "",
         "submitted",
         "",
         "",
@@ -343,20 +350,28 @@ export const citizenApi = {
     const dbUser = queryOne("SELECT * FROM users WHERE id = ?", [Number(user.id)]);
     const title = String(body.title || "").trim();
     const details = String(body.details || "").trim();
+    const complaintDate = String(body.complaintDate || "").trim();
+    const complaintLocation = String(body.complaintLocation || "").trim();
+    const complaintType = String(body.complaintType || "").trim();
     if (!title) throw new Error("Complaint title is required");
     if (!details) throw new Error("Complaint details are required");
+    if (!complaintDate) throw new Error("Complaint date is required");
+    if (!complaintLocation && !complaintType) throw new Error("Complaint must include a location or type");
     const now = ts();
     const complaintCode = nextCode("COMP", "complaints");
     execute(
       `INSERT INTO complaints (
-        complaintId,citizenId,citizenSnapshot,title,details,attachments,resolutionDocs,status,assignedAdminUserId,assignedAdminName,referralAdminUserId,department,officerName,officerContact,manualContact,callScheduledAt,callOutcome,escalatedMeetingRequestId,createdAt,updatedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        complaintId,citizenId,citizenSnapshot,title,details,complaintDate,complaintLocation,complaintType,attachments,resolutionDocs,status,assignedAdminUserId,assignedAdminName,referralAdminUserId,department,officerName,officerContact,manualContact,callScheduledAt,callOutcome,escalatedMeetingRequestId,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         complaintCode,
         Number(user.id),
         JSON.stringify(getCitizenSnapshot(dbUser)),
         title,
         details,
+        complaintDate,
+        complaintLocation,
+        complaintType,
         JSON.stringify(body.attachments || []),
         JSON.stringify([]),
         "pooled",

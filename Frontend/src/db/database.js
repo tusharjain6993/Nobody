@@ -2,7 +2,7 @@ import initSqlJs from "sql.js";
 
 const DB_STORAGE_KEY = "hcm_demo_sqlite_v3";
 const DB_SCHEMA_VERSION_KEY = "hcm_demo_schema_version";
-const DB_SCHEMA_VERSION = "10";
+const DB_SCHEMA_VERSION = "11";
 
 let db = null;
 let dbPromise = null;
@@ -50,10 +50,12 @@ function isSchemaCompatible() {
       ["users", "citizenId"],
       ["users", "pinCode"],
       ["users", "photoData"],
+      ["meeting_requests", "attachments"],
       ["meeting_requests", "meetingDocket"],
       ["meeting_requests", "assignedAdminUserId"],
       ["complaints", "resolutionDocs"],
       ["complaints", "resolutionSummary"],
+      ["complaints", "complaintDate"],
       ["calendar_events", "productivityScore"],
       ["calendar_events", "documents"],
       ["notifications", "link"],
@@ -169,6 +171,7 @@ function runSchema() {
     referralAdminName TEXT NOT NULL,
     assignedAdminUserId INTEGER,
     assignedAdminName TEXT DEFAULT '',
+    attachments TEXT NOT NULL DEFAULT '[]',
     attachmentName TEXT DEFAULT '',
     attachmentType TEXT DEFAULT '',
     attachmentData TEXT DEFAULT '',
@@ -193,6 +196,9 @@ function runSchema() {
     citizenSnapshot TEXT NOT NULL,
     title TEXT NOT NULL,
     details TEXT NOT NULL,
+    complaintDate TEXT DEFAULT '',
+    complaintLocation TEXT DEFAULT '',
+    complaintType TEXT DEFAULT '',
     attachments TEXT NOT NULL DEFAULT '[]',
     resolutionDocs TEXT NOT NULL DEFAULT '[]',
     resolutionSummary TEXT DEFAULT '',
