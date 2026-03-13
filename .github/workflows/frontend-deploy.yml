@@ -44,7 +44,7 @@ jobs:
   deploy:
     needs: verify
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/latest' || github.ref == 'refs/heads/honey'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
