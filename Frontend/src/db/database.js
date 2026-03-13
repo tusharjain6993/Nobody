@@ -1,22 +1,111 @@
 import initSqlJs from "sql.js";
-import { ADMIN_ROLES, MASTER_ADMIN_ROLE, getDepartmentOwner, getRoleLabel } from "../constants/adminWorkflow";
+
+const DB_STORAGE_KEY = "hcm_demo_sqlite_v3";
+const DB_SCHEMA_VERSION_KEY = "hcm_demo_schema_version";
+const DB_SCHEMA_VERSION = "7";
 
 let db = null;
 let dbPromise = null;
 
-export function getDb() {
-  if (db) return Promise.resolve(db);
+function toBase64(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.slice(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function fromBase64(value) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function persistDb() {
+  if (!db) return;
+  const bytes = db.export();
+  localStorage.setItem(DB_STORAGE_KEY, toBase64(bytes));
+  localStorage.setItem(DB_SCHEMA_VERSION_KEY, DB_SCHEMA_VERSION);
+}
+
+function clearPersistedDb() {
+  localStorage.removeItem(DB_STORAGE_KEY);
+  localStorage.removeItem(DB_SCHEMA_VERSION_KEY);
+}
+
+function hasColumn(tableName, columnName) {
+  const rows = db.exec(`PRAGMA table_info(${tableName})`);
+  if (!rows?.[0]?.values) return false;
+  return rows[0].values.some((row) => row[1] === columnName);
+}
+
+function isSchemaCompatible() {
+  try {
+    const requiredChecks = [
+      ["users", "phoneNumbers"],
+      ["users", "citizenId"],
+      ["meeting_requests", "meetingDocket"],
+      ["complaints", "resolutionDocs"],
+      ["calendar_events", "productivityScore"],
+      ["calendar_events", "documents"],
+      ["notifications", "link"],
+    ];
+    return requiredChecks.every(([table, column]) => hasColumn(table, column));
+  } catch {
+    return false;
+  }
+}
+
+function initializeFreshDb() {
+  runSchema();
+  runSeeds();
+  persistDb();
+}
+
+export async function getDb() {
+  if (db) return db;
   if (!dbPromise) {
+    const wasmPath = typeof window === "undefined"
+      ? new URL("../../public/sql-wasm.wasm", import.meta.url).pathname
+      : "/sql-wasm.wasm";
     dbPromise = initSqlJs({
-      locateFile: () => "/sql-wasm.wasm",
+      locateFile: () => wasmPath,
     }).then((SQL) => {
-      db = new SQL.Database();
-      runSchema();
-      runSeeds();
+      const snapshot = localStorage.getItem(DB_STORAGE_KEY);
+      const savedVersion = localStorage.getItem(DB_SCHEMA_VERSION_KEY);
+
+      if (snapshot && savedVersion === DB_SCHEMA_VERSION) {
+        try {
+          db = new SQL.Database(fromBase64(snapshot));
+          if (!isSchemaCompatible()) {
+            clearPersistedDb();
+            db = new SQL.Database();
+            initializeFreshDb();
+          }
+        } catch {
+          clearPersistedDb();
+          db = new SQL.Database();
+          initializeFreshDb();
+        }
+      } else {
+        clearPersistedDb();
+        db = new SQL.Database();
+        initializeFreshDb();
+      }
       return db;
     });
   }
   return dbPromise;
+}
+
+export function resetDemoDatabase() {
+  db = null;
+  dbPromise = null;
+  clearPersistedDb();
 }
 
 function runSchema() {
@@ -24,104 +113,120 @@ function runSchema() {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    phone TEXT NOT NULL,
-    gender TEXT NOT NULL,
-    age INTEGER NOT NULL,
-    aadhaar TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL,
-    citizenUniqueId TEXT UNIQUE,
-    role TEXT NOT NULL DEFAULT 'citizen',
-    isVerified INTEGER NOT NULL DEFAULT 0,
+    password TEXT NOT NULL DEFAULT '',
+    aadhaar TEXT UNIQUE,
+    phonePrimary TEXT,
+    phoneSecondary TEXT DEFAULT '',
+    phoneTertiary TEXT DEFAULT '',
+    phoneNumbers TEXT NOT NULL DEFAULT '[]',
+    citizenId TEXT UNIQUE,
+    role TEXT NOT NULL,
+    department TEXT DEFAULT '',
+    isVerified INTEGER NOT NULL DEFAULT 1,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL
-  )`);
-
-  db.run(`CREATE TABLE cases (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    caseId TEXT UNIQUE NOT NULL,
-    citizenId INTEGER NOT NULL,
-    citizenSnapshot TEXT,
-    purpose TEXT NOT NULL,
-    category TEXT NOT NULL DEFAULT 'General Grievance',
-    department TEXT NOT NULL,
-    assignedAdminRole TEXT NOT NULL,
-    currentAdminRole TEXT NOT NULL,
-    currentAdminName TEXT NOT NULL,
-    details TEXT,
-    urgency TEXT DEFAULT 'MEDIUM',
-    documents TEXT DEFAULT '[]',
-    status TEXT NOT NULL DEFAULT 'SUBMITTED',
-    reviewNote TEXT,
-    resolvedWithoutMeeting INTEGER DEFAULT 0,
-    schedule TEXT,
-    meetingSummary TEXT,
-    actionRequired TEXT,
-    responsibleAuthority TEXT,
-    closureRequestedAt TEXT,
-    closureType TEXT DEFAULT '',
-    ministerDecisionNote TEXT,
-    reopenedCount INTEGER DEFAULT 0,
-    escalationReason TEXT,
-    isArchived INTEGER DEFAULT 0,
-    isDeleted INTEGER DEFAULT 0,
-    createdAt TEXT NOT NULL,
-    updatedAt TEXT NOT NULL
-  )`);
-
-  db.run(`CREATE TABLE communications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    caseId INTEGER NOT NULL,
-    type TEXT NOT NULL,
-    summary TEXT NOT NULL,
-    happenedAt TEXT NOT NULL,
-    createdByName TEXT DEFAULT 'Staff',
-    createdAt TEXT NOT NULL
-  )`);
-
-  db.run(`CREATE TABLE comments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    caseId INTEGER NOT NULL,
-    comment TEXT NOT NULL,
-    createdByRole TEXT NOT NULL,
-    createdByName TEXT NOT NULL,
-    createdAt TEXT NOT NULL
   )`);
 
   db.run(`CREATE TABLE departments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    state TEXT NOT NULL,
-    ministerName TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
+    ministry TEXT NOT NULL,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL
   )`);
 
-  db.run(`CREATE TABLE employees (
+  db.run(`CREATE TABLE department_contacts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    role TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    department TEXT NOT NULL,
+    officerName TEXT NOT NULL,
+    designation TEXT NOT NULL,
     phone TEXT NOT NULL,
-    department TEXT NOT NULL,
-    location TEXT NOT NULL,
-    isActive INTEGER DEFAULT 1,
-    profileImg TEXT DEFAULT '',
-    joinDate TEXT NOT NULL,
-    salary TEXT DEFAULT '',
+    email TEXT NOT NULL,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL
   )`);
 
-  db.run(`CREATE TABLE meetings (
+  db.run(`CREATE TABLE meeting_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    caseId INTEGER,
-    caseNumber TEXT DEFAULT '',
-    department TEXT NOT NULL,
+    requestId TEXT NOT NULL UNIQUE,
+    citizenId INTEGER NOT NULL,
+    citizenSnapshot TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    referralAdminUserId INTEGER,
+    referralAdminName TEXT NOT NULL,
+    attachmentName TEXT DEFAULT '',
+    attachmentType TEXT DEFAULT '',
+    attachmentData TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'submitted',
+    verificationOutcome TEXT DEFAULT '',
+    rejectReason TEXT DEFAULT '',
+    scheduleDate TEXT DEFAULT '',
+    scheduleTime TEXT DEFAULT '',
+    scheduleLocation TEXT DEFAULT '',
+    visitorId TEXT DEFAULT '',
+    meetingDocket TEXT DEFAULT '',
+    adminNotes TEXT DEFAULT '',
+    escalatedFromComplaintId INTEGER,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  )`);
+
+  db.run(`CREATE TABLE complaints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    complaintId TEXT NOT NULL UNIQUE,
+    citizenId INTEGER NOT NULL,
+    citizenSnapshot TEXT NOT NULL,
     title TEXT NOT NULL,
-    assignedToName TEXT DEFAULT '',
-    priority TEXT DEFAULT 'MEDIUM',
-    dueDate TEXT,
-    status TEXT DEFAULT 'PENDING',
+    details TEXT NOT NULL,
+    attachments TEXT NOT NULL DEFAULT '[]',
+    resolutionDocs TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'pooled',
+    assignedAdminUserId INTEGER,
+    assignedAdminName TEXT DEFAULT '',
+    referralAdminUserId INTEGER,
+    department TEXT DEFAULT '',
+    officerName TEXT DEFAULT '',
+    officerContact TEXT DEFAULT '',
+    manualContact TEXT DEFAULT '',
+    callScheduledAt TEXT DEFAULT '',
+    callOutcome TEXT DEFAULT '',
+    escalatedMeetingRequestId INTEGER,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  )`);
+
+  db.run(`CREATE TABLE activity_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entityType TEXT NOT NULL,
+    entityId INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    notes TEXT DEFAULT '',
+    createdByUserId INTEGER,
+    createdByName TEXT NOT NULL,
+    createdAt TEXT NOT NULL
+  )`);
+
+  db.run(`CREATE TABLE calendar_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    details TEXT NOT NULL,
+    eventType TEXT NOT NULL,
+    scheduleAt TEXT NOT NULL,
+    endAt TEXT NOT NULL,
+    durationMinutes INTEGER NOT NULL DEFAULT 0,
+    department TEXT DEFAULT '',
+    mediaFolder TEXT DEFAULT '',
+    photos TEXT NOT NULL DEFAULT '[]',
+    documents TEXT NOT NULL DEFAULT '[]',
+    videoLink TEXT DEFAULT '',
+    attendanceStatus TEXT NOT NULL DEFAULT 'planned',
+    attendedAt TEXT DEFAULT '',
+    classification TEXT DEFAULT '',
+    participationRole TEXT NOT NULL DEFAULT 'Attendee',
+    portfolio TEXT NOT NULL DEFAULT 'Neither',
+    productivityScore REAL NOT NULL DEFAULT 0,
+    createdByUserId INTEGER,
+    createdByName TEXT NOT NULL,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL
   )`);
@@ -129,300 +234,234 @@ function runSchema() {
   db.run(`CREATE TABLE notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     userId INTEGER NOT NULL,
+    type TEXT NOT NULL,
     message TEXT NOT NULL,
-    caseId INTEGER,
-    type TEXT DEFAULT 'GENERAL',
-    isRead INTEGER DEFAULT 0,
+    link TEXT DEFAULT '',
+    isRead INTEGER NOT NULL DEFAULT 0,
     createdAt TEXT NOT NULL
-  )`);
-
-  db.run(`CREATE TABLE otps (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT COLLATE NOCASE,
-    phone TEXT,
-    otp TEXT NOT NULL,
-    expiresAt TEXT NOT NULL
   )`);
 }
 
 function runSeeds() {
   const now = new Date().toISOString();
 
-  for (const role of ADMIN_ROLES) {
+  const seedUsers = [
+    {
+      name: "Admin Demo",
+      email: "admin@portal.gov",
+      password: "admin123",
+      role: "admin",
+      department: "General Administration",
+    },
+    {
+      name: "Priya Sharma",
+      email: "priya.admin@portal.gov",
+      password: "admin123",
+      role: "admin",
+      department: "Tourism Desk",
+    },
+    {
+      name: "Arjun Mehta",
+      email: "arjun.admin@portal.gov",
+      password: "admin123",
+      role: "admin",
+      department: "Culture Affairs Desk",
+    },
+    {
+      name: "Minister Demo",
+      email: "minister@portal.gov",
+      password: "minister123",
+      role: "minister",
+      department: "Minister Office",
+    },
+    {
+      name: "DEO Demo",
+      email: "deo@portal.gov",
+      password: "deo123",
+      role: "deo",
+      department: "Calendar Cell",
+    },
+    {
+      name: "Citizen User",
+      email: "citizen@test.com",
+      password: "",
+      role: "citizen",
+      aadhaar: "123412341234",
+      citizenId: "CTZ-HP-000001",
+      phoneNumbers: ["9876543210", "9876500000"],
+      department: "",
+    },
+    {
+      name: "Aman Sogani",
+      email: "amanmathssogani@gmail.com",
+      password: "",
+      role: "citizen",
+      aadhaar: "345678901234",
+      citizenId: "CTZ-HP-000002",
+      phoneNumbers: ["9876543215"],
+      department: "",
+    },
+  ];
+
+  seedUsers.forEach((user) => {
+    const phones = user.phoneNumbers || [];
     db.run(
-      `INSERT INTO users (name,email,phone,gender,age,aadhaar,password,role,isVerified,createdAt,updatedAt)
-       VALUES (?,?,?,?,?,?,?,?,1,?,?)`,
+      `INSERT INTO users (
+        name,email,password,aadhaar,phonePrimary,phoneSecondary,phoneTertiary,phoneNumbers,citizenId,role,department,isVerified,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        `${role.label} Admin`,
-        role.email,
-        `90000000${String(Math.floor(Math.random() * 90) + 10)}`,
-        "MALE",
-        42,
-        String(Math.floor(100000000000 + Math.random() * 899999999999)),
-        role.password,
-        role.id,
+        user.name,
+        user.email,
+        user.password,
+        user.aadhaar || null,
+        phones[0] || "",
+        phones[1] || "",
+        phones[2] || "",
+        JSON.stringify(phones),
+        user.citizenId || null,
+        user.role,
+        user.department || "",
+        1,
         now,
         now,
       ]
     );
-  }
+  });
+
+  const departments = [
+    ["Culture Affairs Desk", "Culture"],
+    ["Tourism Outreach Cell", "Tourism"],
+    ["Heritage Preservation Division", "Culture"],
+    ["Public Grievance Cell", "Administration"],
+    ["Industry Partnerships Wing", "Tourism"],
+  ];
+
+  departments.forEach(([name, ministry]) => {
+    db.run(
+      "INSERT INTO departments (name,ministry,createdAt,updatedAt) VALUES (?,?,?,?)",
+      [name, ministry, now, now]
+    );
+  });
+
+  const contacts = [
+    ["Culture Affairs Desk", "Neha Kapoor", "Section Officer", "9811100001", "neha.kapoor@gov.demo"],
+    ["Tourism Outreach Cell", "Ravi Nair", "Deputy Director", "9811100002", "ravi.nair@gov.demo"],
+    ["Heritage Preservation Division", "Sonal Gupta", "Nodal Officer", "9811100003", "sonal.gupta@gov.demo"],
+    ["Public Grievance Cell", "Karan Malhotra", "Grievance Officer", "9811100004", "karan.malhotra@gov.demo"],
+    ["Industry Partnerships Wing", "Aditi Verma", "Industry Liaison", "9811100005", "aditi.verma@gov.demo"],
+  ];
+
+  contacts.forEach((row) => {
+    db.run(
+      `INSERT INTO department_contacts (department,officerName,designation,phone,email,createdAt,updatedAt)
+       VALUES (?,?,?,?,?,?,?)`,
+      [...row, now, now]
+    );
+  });
 
   db.run(
-    `INSERT INTO users (name,email,phone,gender,age,aadhaar,password,role,isVerified,createdAt,updatedAt)
-     VALUES (?,?,?,?,?,?,?,?,1,?,?)`,
+    `INSERT INTO meeting_requests (
+      requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleLocation,visitorId,meetingDocket,adminNotes,escalatedFromComplaintId,createdAt,updatedAt
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
-      MASTER_ADMIN_ROLE.label,
-      MASTER_ADMIN_ROLE.email,
-      "9555555555",
-      "FEMALE",
-      50,
-      "888877776666",
-      MASTER_ADMIN_ROLE.password,
-      MASTER_ADMIN_ROLE.id,
+      "MREQ-000001",
+      4,
+      JSON.stringify({ name: "Citizen User", citizenId: "CTZ-HP-000001", aadhaar: "123412341234", phoneNumbers: ["9876543210", "9876500000"] }),
+      "Discussion on cultural scholarship release",
+      1,
+      "Admin Demo",
+      "",
+      "",
+      "",
+      "scheduled",
+      "Documents verified over a call with the applicant.",
+      "",
+      new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      "11:30",
+      "North Block Meeting Room 3",
+      "VIS-2026-001",
+      "DOC-2026-001",
+      "Carry scholarship application copy.",
+      null,
       now,
       now,
     ]
   );
 
   db.run(
-    `INSERT INTO users (name,email,phone,gender,age,aadhaar,password,citizenUniqueId,role,isVerified,createdAt,updatedAt)
-     VALUES (?,?,?,?,?,?,?,?,?,1,?,?)`,
-    ["Citizen User", "citizen@test.com", "9876543210", "MALE", 30, "123412341234", "test123", "CTZ-HP-000001", "citizen", now, now]
+    `INSERT INTO complaints (
+      complaintId,citizenId,citizenSnapshot,title,details,attachments,resolutionDocs,status,assignedAdminUserId,assignedAdminName,referralAdminUserId,department,officerName,officerContact,manualContact,callScheduledAt,callOutcome,escalatedMeetingRequestId,createdAt,updatedAt
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      "COMP-000001",
+      5,
+      JSON.stringify({ name: "Aman Sogani", citizenId: "CTZ-HP-000002", aadhaar: "345678901234", phoneNumbers: ["9876543215"] }),
+      "Tourism permit approval delayed",
+      "A district tourism permit has been pending for over six weeks without a response.",
+      JSON.stringify([]),
+      JSON.stringify([]),
+      "pooled",
+      null,
+      "",
+      2,
+      "Tourism Outreach Cell",
+      "",
+      "",
+      "",
+      "",
+      "",
+      null,
+      now,
+      now,
+    ]
   );
 
   db.run(
-    `INSERT INTO users (name,email,phone,gender,age,aadhaar,password,citizenUniqueId,role,isVerified,createdAt,updatedAt)
-     VALUES (?,?,?,?,?,?,?,?,?,1,?,?)`,
-    ["Aman Sogani", "amanmathssogani@gmail.com", "9876543215", "MALE", 25, "345678901234", "aman123", "CTZ-HP-000002", "citizen", now, now]
+    `INSERT INTO calendar_events (
+      title,details,eventType,scheduleAt,endAt,durationMinutes,department,mediaFolder,photos,documents,videoLink,attendanceStatus,attendedAt,classification,participationRole,portfolio,productivityScore,createdByUserId,createdByName,createdAt,updatedAt
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      "Heritage Museum Review",
+      "Review of restoration progress and public accessibility work.",
+      "Scheduled Meeting",
+      new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      new Date(Date.now() - 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
+      90,
+      "Heritage Preservation Division",
+      "heritage/review-mar-2026",
+      JSON.stringify([]),
+      JSON.stringify([]),
+      "",
+      "attended",
+      new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      "Governance Work",
+      "Chair",
+      "Culture",
+      9.1,
+      3,
+      "DEO Demo",
+      now,
+      now,
+    ]
   );
-
-  const departments = [
-    ["Minister's Office", "Central", "Shri Gajendra Singh Shekhawat"],
-    ["Minister of State's Office", "Central", "Smt. Gajala Yogita Rajput"],
-    ["Secretary's Office", "Central", "Shri Arunish Chawla"],
-    ["Additional Secretary's Office", "Central", "Shri Rajesh Ranjan"],
-    ["Joint Secretary (Academy & Culture)", "Central", "Ms. Nirupama Kotru"],
-    ["Joint Secretary (Museum & Library)", "Central", "Shri M. Manikandan"],
-    ["Joint Secretary (Media & Film)", "Central", "Ms. K. Nandini Singla"],
-    ["Financial Advisor", "Central", "Dr. B.K. Sinha"],
-    ["Archaeological Survey of India (ASI)", "Central", "Director General"],
-    ["National Archives of India", "Central", "Director General"],
-    ["National Museum", "Central", "Director General"],
-    ["National Gallery of Modern Art (NGMA)", "Central", "Director General"],
-    ["Anthropological Survey of India (AnSI)", "Central", "Director General"],
-    ["National Library, Kolkata", "West Bengal", "Director General"],
-    ["Indira Gandhi National Centre for the Arts (IGNCA)", "Central", "Member Secretary"],
-    ["Sahitya Akademi", "Central", "Secretary"],
-    ["Sangeet Natak Akademi", "Central", "Secretary"],
-    ["Lalit Kala Akademi", "Central", "Secretary"],
-    ["National School of Drama (NSD)", "Central", "Director"],
-    ["Centre for Cultural Resources & Training (CCRT)", "Central", "Director"],
-    ["Central Reference Library", "West Bengal", "Director"],
-    ["Zonal Cultural Centres", "Central", "Director"],
-    ["National Council of Science Museums (NCSM)", "Central", "Director General"],
-    ["Gandhi Smriti & Darshan Samiti", "Central", "Director"],
-    ["Rampur Raza Library", "Uttar Pradesh", "Director"],
-    ["Khuda Bakhsh Oriental Library", "Bihar", "Director"],
-    ["Raja Ram Mohan Roy Library Foundation", "West Bengal", "Director"],
-    ["Central Institute of Buddhist Studies", "Ladakh", "Director"],
-    ["Central University of Tibetan Studies", "Uttar Pradesh", "Vice-Chancellor"],
-    ["Nav Nalanda Mahavihara", "Bihar", "Director"],
-    ["National Mission on Libraries", "Central", "Mission Director"],
-    ["Central Institute of Higher Tibetan Studies", "Uttar Pradesh", "Director"],
-  ];
-
-  for (const [name, state, ministerName] of departments) {
-    db.run(
-      `INSERT INTO departments (name,state,ministerName,createdAt,updatedAt) VALUES (?,?,?,?,?)`,
-      [name, state, ministerName, now, now]
-    );
-  }
-
-  const departmentRows = departments.map(([name]) => ({ name }));
-  seedCases(now, departmentRows);
-}
-
-function seedCases(now, departments) {
-  const citizen1 = 6;
-  const citizen2 = 7;
-  const sampleCases = [
-    {
-      caseId: "HP-CASE-000001",
-      citizenId: citizen1,
-      citizenSnapshot: {
-        name: "Citizen User",
-        email: "citizen@test.com",
-        phone: "9876543210",
-        aadhaar: "123412341234",
-        gender: "MALE",
-        age: 30,
-      },
-      purpose: "Scholarship payment is pending",
-      category: "Education",
-      department: departments[0].name,
-      details: "The scholarship portal shows approved but the amount was not credited.",
-      urgency: "HIGH",
-      status: "SUBMITTED",
-      reviewNote: "",
-    },
-    {
-      caseId: "HP-CASE-000002",
-      citizenId: citizen2,
-      citizenSnapshot: {
-        name: "Aman Sogani",
-        email: "amanmathssogani@gmail.com",
-        phone: "9876543215",
-        aadhaar: "345678901234",
-        gender: "MALE",
-        age: 25,
-      },
-      purpose: "Need correction in university certificate",
-      category: "University",
-      department: departments[10].name,
-      details: "Spelling mistake in the degree certificate is blocking job verification.",
-      urgency: "MEDIUM",
-      status: "APPROVED",
-      reviewNote: "Documents checked and case approved for handling.",
-      meeting: {
-        scheduledAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-        slot: "11:00 AM - 11:30 AM",
-        type: "In Person",
-        venue: "Kartavya Bhawan",
-      },
-    },
-    {
-      caseId: "HP-CASE-000003",
-      citizenId: citizen1,
-      citizenSnapshot: {
-        name: "Citizen User",
-        email: "citizen@test.com",
-        phone: "9876543210",
-        aadhaar: "123412341234",
-        gender: "MALE",
-        age: 30,
-      },
-      purpose: "Library grant issue resolved, closure pending",
-      category: "Library",
-      department: departments[22].name,
-      details: "Grant documentation has been completed and the admin has requested closure.",
-      urgency: "LOW",
-      status: "CLOSURE_PENDING_MINISTER",
-      reviewNote: "Closure request sent to minister after final review.",
-      meetingSummary: "Citizen confirmed the issue has been resolved.",
-      actionRequired: "Release final acknowledgement.",
-      responsibleAuthority: "Department finance desk",
-      closureRequestedAt: now,
-      closureType: "CLOSURE",
-    },
-    {
-      caseId: "HP-CASE-000004",
-      citizenId: citizen2,
-      citizenSnapshot: {
-        name: "Aman Sogani",
-        email: "amanmathssogani@gmail.com",
-        phone: "9876543215",
-        aadhaar: "345678901234",
-        gender: "MALE",
-        age: 25,
-      },
-      purpose: "Complaint already handled locally",
-      category: "Public Service",
-      department: departments[28].name,
-      details: "The complaint was already solved by the local office before portal review.",
-      urgency: "MEDIUM",
-      status: "REJECTION_PENDING_MINISTER",
-      reviewNote: "Admin recommends rejection because the issue is already resolved.",
-      closureRequestedAt: now,
-      closureType: "REJECTION",
-    },
-  ];
-
-  sampleCases.forEach((item) => {
-    const owner = getDepartmentOwner(departments, item.department);
-    const adminLabel = owner?.roleLabel || "Director";
-    const assignedAdminRole = owner?.roleId || "director";
-    const schedule = item.meeting ? JSON.stringify(item.meeting) : null;
-    db.run(
-      `INSERT INTO cases (
-        caseId,citizenId,citizenSnapshot,purpose,category,department,assignedAdminRole,currentAdminRole,currentAdminName,
-        details,urgency,status,reviewNote,resolvedWithoutMeeting,schedule,meetingSummary,actionRequired,responsibleAuthority,
-        closureRequestedAt,closureType,ministerDecisionNote,reopenedCount,escalationReason,isArchived,isDeleted,createdAt,updatedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        item.caseId,
-        item.citizenId,
-        JSON.stringify(item.citizenSnapshot),
-        item.purpose,
-        item.category,
-        item.department,
-        assignedAdminRole,
-        assignedAdminRole,
-        adminLabel,
-        item.details,
-        item.urgency,
-        item.status,
-        item.reviewNote || "",
-        item.status === "RESOLVED_WITHOUT_MEETING" ? 1 : 0,
-        schedule,
-        item.meetingSummary || "",
-        item.actionRequired || "",
-        item.responsibleAuthority || "",
-        item.closureRequestedAt || null,
-        item.closureType || "",
-        "",
-        0,
-        "",
-        0,
-        0,
-        now,
-        now,
-      ]
-    );
-  });
 
   db.run(
-    `INSERT INTO communications (caseId,type,summary,happenedAt,createdByName,createdAt) VALUES (?,?,?,?,?,?)`,
-    [2, "EMAIL", "Citizen asked for the next available correction meeting date.", now, "Director General Admin", now]
+    `INSERT INTO notifications (userId,type,message,link,isRead,createdAt) VALUES (?,?,?,?,0,?)`,
+    [1, "Complaint Submitted", "A new complaint has entered the common complaint pool.", "/cases/complaint/1", now]
   );
-  db.run(
-    `INSERT INTO communications (caseId,type,summary,happenedAt,createdByName,createdAt) VALUES (?,?,?,?,?,?)`,
-    [3, "CALL", "Citizen confirmed receipt of the revised grant sanction letter.", now, "Director General Admin", now]
-  );
-  db.run(
-    `INSERT INTO comments (caseId,comment,createdByRole,createdByName,createdAt) VALUES (?,?,?,?,?)`,
-    [2, "All uploaded documents are valid. Meeting can be held if needed.", "director_general", "Director General Admin", now]
-  );
-  db.run(
-    `INSERT INTO comments (caseId,comment,createdByRole,createdByName,createdAt) VALUES (?,?,?,?,?)`,
-    [3, "Closure summary is complete and ready for minister review.", "director_general", "Director General Admin", now]
-  );
-
-  const notifications = [
-    [citizen1, "Your case HP-CASE-000001 was routed to the Director.", 1, "CASE_CREATED"],
-    [citizen2, "Your case HP-CASE-000002 was approved by the Director General.", 2, "STATUS_CHANGE"],
-    [citizen1, "Closure request for HP-CASE-000003 is awaiting minister review.", 3, "STATUS_CHANGE"],
-    [5, "A rejection request for HP-CASE-000004 needs minister review.", 4, "STATUS_CHANGE"],
-  ];
-
-  notifications.forEach(([userId, message, caseId, type]) => {
-    db.run(
-      `INSERT INTO notifications (userId,message,caseId,type,isRead,createdAt) VALUES (?,?,?,?,0,?)`,
-      [userId, message, caseId, type, now]
-    );
-  });
 }
 
 export function queryAll(sql, params = []) {
   const stmt = db.prepare(sql);
   if (params.length) stmt.bind(params);
-  const results = [];
+  const rows = [];
   while (stmt.step()) {
     const row = stmt.getAsObject();
     if (row.id !== undefined) row._id = String(row.id);
-    results.push(row);
+    rows.push(row);
   }
   stmt.free();
-  return results;
+  return rows;
 }
 
 export function queryOne(sql, params = []) {
@@ -431,8 +470,9 @@ export function queryOne(sql, params = []) {
 
 export function execute(sql, params = []) {
   db.run(sql, params);
+  persistDb();
 }
 
 export function lastInsertId() {
-  return db.exec("SELECT last_insert_rowid() as id")[0]?.values[0]?.[0];
+  return db.exec("SELECT last_insert_rowid()")[0]?.values?.[0]?.[0] || null;
 }

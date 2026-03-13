@@ -1,25 +1,27 @@
 import { STAFF_ROLE_IDS } from "./adminWorkflow";
 
-/** Case status values used by the API and UI. */
-export const CASE_STATUSES = [
-  "SUBMITTED",
-  "IN_REVIEW",
-  "APPROVED",
-  "REQUEST_CLARIFICATION",
-  "RESOLVED",
-  "RESOLVED_WITHOUT_MEETING",
-  "SCHEDULED",
-  "REOPENED",
-  "ESCALATED",
-  "CLOSURE_PENDING_MINISTER",
-  "REJECTION_PENDING_MINISTER",
-  "REJECTED",
-  "CLOSED",
+export const MEETING_REQUEST_STATUSES = [
+  "submitted",
+  "under_review",
+  "verification_needed",
+  "verification_completed",
+  "approved",
+  "scheduled",
+  "rejected",
 ];
 
-/** Staff roles that can access dashboard, cases, review, schedule. */
-export const STAFF_ROLES = STAFF_ROLE_IDS;
+export const COMPLAINT_STATUSES = [
+  "submitted",
+  "pooled",
+  "assigned",
+  "under_review",
+  "department_contact_identified",
+  "call_scheduled",
+  "followup_in_progress",
+  "resolved",
+  "escalated_to_admin_meeting",
+];
 
 export function isStaffRole(role) {
-  return STAFF_ROLES.includes(role);
+  return STAFF_ROLE_IDS.includes(role);
 }

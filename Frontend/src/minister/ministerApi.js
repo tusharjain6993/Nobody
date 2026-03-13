@@ -1,5 +1,9 @@
-import { getDb, queryAll, queryOne, execute, lastInsertId } from "../db/database";
-import { ADMIN_ROLES, MASTER_ADMIN_ROLE, STAFF_ROLE_IDS, getDepartmentOwner, getRoleLabel, splitDepartmentsAcrossAdmins } from "../constants/adminWorkflow";
+import { getDb, queryAll, queryOne, execute } from "../db/database";
+import { calculateProductivityScore, classifyEvent, buildAnalytics } from "../utils/analytics";
+
+function ts() {
+  return new Date().toISOString();
+}
 
 function getCurrentUser() {
   try {
@@ -9,936 +13,873 @@ function getCurrentUser() {
   }
 }
 
-function ts() {
-  return new Date().toISOString();
-}
-
-function maskAadhaar(v) {
-  if (!v || typeof v !== "string") return v;
-  const c = v.replace(/\s/g, "");
-  return c.length < 4 ? "****" : `****-****-${c.slice(-4)}`;
-}
-
-function parseJ(str, fallback = null) {
-  if (str == null || str === "") return fallback;
+function parseJson(value, fallback) {
+  if (!value) return fallback;
   try {
-    return JSON.parse(str);
+    return JSON.parse(value);
   } catch {
     return fallback;
   }
 }
 
-function generateOtp() {
-  let otp = "";
-  for (let i = 0; i < 6; i += 1) otp += Math.floor(Math.random() * 10);
-  return otp;
+function normalizePhones(payload = {}) {
+  const phones = [payload.phonePrimary, payload.phoneSecondary, payload.phoneTertiary]
+    .map((phone) => String(phone || "").replace(/\D/g, ""))
+    .filter(Boolean);
+  return Array.from(new Set(phones));
 }
 
-function buildCaseRow(row) {
-  if (!row) return null;
-  const obj = { ...row };
-  obj.citizenSnapshot = parseJ(row.citizenSnapshot, {});
-  obj.documents = parseJ(row.documents, []);
-  obj.schedule = parseJ(row.schedule, null);
-  obj.isArchived = !!row.isArchived;
-  obj.isDeleted = !!row.isDeleted;
-  obj.resolvedWithoutMeeting = !!row.resolvedWithoutMeeting;
-  obj.reopenedCount = Number(row.reopenedCount || 0);
-  obj.assignedAdminLabel = getRoleLabel(row.assignedAdminRole);
-  obj.currentAdminLabel = getRoleLabel(row.currentAdminRole);
-  if (obj.citizenSnapshot?.aadhaar) {
-    obj.citizenSnapshot.aadhaar = maskAadhaar(obj.citizenSnapshot.aadhaar);
-  }
-  return obj;
+function maskAadhaar(value = "") {
+  const clean = String(value).replace(/\D/g, "");
+  return clean.length === 12 ? `****-****-${clean.slice(-4)}` : value;
 }
 
-function buildFullCase(row) {
-  const obj = buildCaseRow(row);
-  if (!obj) return null;
-  obj.communications = queryAll(
-    "SELECT * FROM communications WHERE caseId = ? ORDER BY createdAt DESC",
-    [row.id]
-  );
-  obj.comments = queryAll(
-    "SELECT * FROM comments WHERE caseId = ? ORDER BY createdAt DESC",
-    [row.id]
-  );
-  return obj;
+function getCitizenSnapshot(user) {
+  return {
+    name: user.name,
+    citizenId: user.citizenId,
+    aadhaar: maskAadhaar(user.aadhaar),
+    phoneNumbers: parseJson(user.phoneNumbers, []),
+  };
 }
 
-function nextCaseId() {
-  const row = queryOne("SELECT COUNT(*) as cnt FROM cases");
-  return `HP-CASE-${String((row?.cnt || 0) + 1).padStart(6, "0")}`;
+function humanizeStatus(value = "") {
+  return value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function addNotification(userId, message, caseId, type = "GENERAL") {
-  execute(
-    "INSERT INTO notifications (userId,message,caseId,type,isRead,createdAt) VALUES (?,?,?,?,0,?)",
-    [Number(userId), message, caseId ? Number(caseId) : null, type, ts()]
-  );
+function nextCode(prefix, table, column) {
+  const row = queryOne(`SELECT COUNT(*) as cnt FROM ${table}`);
+  return `${prefix}-${String((row?.cnt || 0) + 1).padStart(6, "0")}`;
 }
 
-function getDepartmentRows() {
-  return queryAll("SELECT * FROM departments ORDER BY id ASC");
+function requireUser() {
+  const user = getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+  return user;
 }
 
-function getAdminNameForRole(roleId) {
-  return getRoleLabel(roleId);
+function requireRole(role) {
+  const user = requireUser();
+  if (user.role !== role) throw new Error("Unauthorized");
+  return user;
 }
 
-function persistCommunications(caseId, communications, createdByName) {
-  const validTypes = ["CALL", "LETTER", "EMAIL", "MEETING_NOTE"];
-  (communications || []).forEach((entry) => {
-    if (!entry?.summary?.trim()) return;
-    const type = validTypes.includes(entry.type) ? entry.type : "CALL";
+function getAdminUsers() {
+  return queryAll("SELECT * FROM users WHERE role = 'admin' ORDER BY id ASC");
+}
+
+function getMinisterUsers() {
+  return queryAll("SELECT * FROM users WHERE role = 'minister' ORDER BY id ASC");
+}
+
+function addNotificationForUsers(userIds, type, message, link = "") {
+  const now = ts();
+  Array.from(new Set(userIds.map(Number))).forEach((userId) => {
     execute(
-      "INSERT INTO communications (caseId,type,summary,happenedAt,createdByName,createdAt) VALUES (?,?,?,?,?,?)",
-      [
-        Number(caseId),
-        type,
-        entry.summary.trim(),
-        entry.happenedAt ? new Date(entry.happenedAt).toISOString() : ts(),
-        createdByName || "Staff",
-        ts(),
-      ]
+      "INSERT INTO notifications (userId,type,message,link,isRead,createdAt) VALUES (?,?,?,?,0,?)",
+      [userId, type, message, link, now]
     );
   });
 }
 
-function persistComment(caseId, comment, user) {
-  if (!comment?.trim()) return;
+function addLog(entityType, entityId, action, notes, user) {
   execute(
-    "INSERT INTO comments (caseId,comment,createdByRole,createdByName,createdAt) VALUES (?,?,?,?,?)",
-    [Number(caseId), comment.trim(), user?.role || "staff", user?.name || "Staff", ts()]
+    "INSERT INTO activity_logs (entityType,entityId,action,notes,createdByUserId,createdByName,createdAt) VALUES (?,?,?,?,?,?,?)",
+    [entityType, Number(entityId), action, notes || "", user?.id ? Number(user.id) : null, user?.name || "System", ts()]
   );
 }
 
-function upsertMeeting(row, meeting) {
-  if (!meeting?.scheduledAt) return;
-  const existing = queryOne("SELECT * FROM meetings WHERE caseId = ?", [Number(row.id)]);
-  const now = ts();
-  const values = [
-    row.id,
-    row.caseId,
-    row.department,
-    meeting.title || row.purpose,
-    getAdminNameForRole(row.currentAdminRole),
-    row.urgency || "MEDIUM",
-    meeting.scheduledAt,
-    "PENDING",
-    now,
-    now,
-  ];
-  if (existing) {
-    execute(
-      "UPDATE meetings SET title=?,assignedToName=?,priority=?,dueDate=?,status='PENDING',updatedAt=? WHERE caseId=?",
-      [meeting.title || row.purpose, getAdminNameForRole(row.currentAdminRole), row.urgency || "MEDIUM", meeting.scheduledAt, now, row.id]
-    );
-  } else {
-    execute(
-      "INSERT INTO meetings (caseId,caseNumber,department,title,assignedToName,priority,dueDate,status,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)",
-      values
-    );
-  }
+function buildMeetingRequest(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    citizenSnapshot: parseJson(row.citizenSnapshot, {}),
+    attachment: row.attachmentData
+      ? { name: row.attachmentName, type: row.attachmentType, data: row.attachmentData }
+      : null,
+    logs: queryAll(
+      "SELECT * FROM activity_logs WHERE entityType='meeting_request' AND entityId=? ORDER BY createdAt DESC",
+      [row.id]
+    ),
+    statusLabel: humanizeStatus(row.status),
+  };
 }
 
-function routeCaseForReferral(roleId) {
-  const role = ADMIN_ROLES.find((item) => item.id === roleId);
-  if (!role) throw new Error("No admin routing found for the selected referral");
+function buildComplaint(row) {
+  if (!row) return null;
   return {
-    roleId: role.id,
-    roleLabel: role.label,
+    ...row,
+    citizenSnapshot: parseJson(row.citizenSnapshot, {}),
+    attachments: parseJson(row.attachments, []),
+    resolutionDocs: parseJson(row.resolutionDocs, []),
+    logs: queryAll(
+      "SELECT * FROM activity_logs WHERE entityType='complaint' AND entityId=? ORDER BY createdAt DESC",
+      [row.id]
+    ),
+    statusLabel: humanizeStatus(row.status),
+  };
+}
+
+function buildCalendarEvent(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    photos: parseJson(row.photos, []),
+    documents: parseJson(row.documents, []),
   };
 }
 
 export const authApi = {
   login: async (email, password) => {
     await getDb();
-    const user = queryOne("SELECT * FROM users WHERE email = ? AND isVerified = 1", [
-      email.trim().toLowerCase(),
-    ]);
+    const user = queryOne("SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND role IN ('admin','minister','deo')", [email.trim()]);
     if (!user || user.password !== password) throw new Error("Invalid email or password");
-    const userData = {
-      id: String(user.id),
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      phone: user.phone,
-      gender: user.gender,
-      age: user.age,
+    return {
+      token: `local-${user.id}`,
+      user: {
+        id: String(user.id),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        department: user.department,
+      },
     };
-    return { message: "Login successful", token: `local-${user.id}`, user: userData };
   },
 
   loginByCitizenId: async (citizenId) => {
     await getDb();
     const user = queryOne(
-      "SELECT * FROM users WHERE citizenUniqueId = ? AND role = 'citizen' AND isVerified = 1",
-      [citizenId.trim()]
+      "SELECT * FROM users WHERE citizenId = ? AND role = 'citizen' AND isVerified = 1",
+      [citizenId.trim().toUpperCase()]
     );
-    if (!user) throw new Error("No verified citizen found for this ID");
-    const userData = {
-      id: String(user.id),
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      phone: user.phone,
-      gender: user.gender,
-      age: user.age,
-      citizenUniqueId: user.citizenUniqueId,
+    if (!user) throw new Error("No verified citizen found for this Citizen ID");
+    return {
+      token: `local-${user.id}`,
+      user: {
+        id: String(user.id),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        citizenId: user.citizenId,
+      },
     };
-    return { message: "Login successful", token: `local-${user.id}`, user: userData };
-  },
-
-  me: async () => {
-    await getDb();
-    const cur = getCurrentUser();
-    if (!cur) throw new Error("Unauthorized");
-    const user = queryOne("SELECT * FROM users WHERE id = ?", [Number(cur.id)]);
-    if (!user) throw new Error("Unauthorized");
-    const obj = { ...user, _id: String(user.id) };
-    if (obj.aadhaar) obj.aadhaar = maskAadhaar(obj.aadhaar);
-    delete obj.password;
-    return { user: obj };
   },
 
   register: async (body) => {
     await getDb();
-    const { name, email, phone, gender, age, aadhaar, password } = body;
-    const norm = email.trim().toLowerCase();
-    const cleanAadhaar = String(aadhaar).replace(/\s/g, "");
+    const name = String(body.name || "").trim();
+    const email = String(body.email || "").trim().toLowerCase();
+    const aadhaar = String(body.aadhaar || "").replace(/\D/g, "");
+    const phones = normalizePhones(body);
 
-    if (!name || !norm || !phone || !gender || !age || !cleanAadhaar || !password) {
-      throw new Error("All fields are required");
-    }
+    if (!name) throw new Error("Name is required");
+    if (!aadhaar || !/^\d{12}$/.test(aadhaar)) throw new Error("Aadhaar must be exactly 12 digits");
+    if (phones.length === 0 || phones.length > 3) throw new Error("Provide between 1 and 3 phone numbers");
+    if (phones.some((phone) => !/^[6-9]\d{9}$/.test(phone))) throw new Error("Phone numbers must be valid 10-digit mobile numbers");
 
-    const existing = queryOne("SELECT * FROM users WHERE email = ? OR aadhaar = ?", [norm, cleanAadhaar]);
-    if (existing && existing.isVerified) throw new Error("User with this email or Aadhaar already exists");
-    if (existing && !existing.isVerified) execute("DELETE FROM users WHERE id = ?", [existing.id]);
+    const existing = queryOne("SELECT id FROM users WHERE aadhaar = ?", [aadhaar]);
+    if (existing) throw new Error("A citizen is already registered with this Aadhaar");
 
-    const citizenCount = queryOne("SELECT COUNT(*) as cnt FROM users WHERE role = 'citizen'");
-    const citizenUniqueId = `CTZ-HP-${String((citizenCount?.cnt || 0) + 1).padStart(6, "0")}`;
+    const citizenId = nextCode("CTZ-HP", "users", "citizenId");
     const now = ts();
-
     execute(
-      `INSERT INTO users (name,email,phone,gender,age,aadhaar,password,citizenUniqueId,role,isVerified,createdAt,updatedAt)
-       VALUES (?,?,?,?,?,?,?,?,?,0,?,?)`,
-      [name, norm, phone, gender, Number(age), cleanAadhaar, password, citizenUniqueId, "citizen", now, now]
+      `INSERT INTO users (
+        name,email,password,aadhaar,phonePrimary,phoneSecondary,phoneTertiary,phoneNumbers,citizenId,role,department,isVerified,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
+      [
+        name,
+        email || `${citizenId.toLowerCase()}@demo.local`,
+        "",
+        aadhaar,
+        phones[0] || "",
+        phones[1] || "",
+        phones[2] || "",
+        JSON.stringify(phones),
+        citizenId,
+        "citizen",
+        "",
+        now,
+        now,
+      ]
     );
+    return { citizenUniqueId: citizenId };
+  },
 
-    const otp = generateOtp();
-    execute("DELETE FROM otps WHERE email = ?", [norm]);
-    execute("INSERT INTO otps (email,otp,expiresAt) VALUES (?,?,?)", [
-      norm,
-      otp,
-      new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-    ]);
+  recoverCitizenId: async ({ aadhaar, phone }) => {
+    await getDb();
+    const cleanAadhaar = String(aadhaar || "").replace(/\D/g, "");
+    const cleanPhone = String(phone || "").replace(/\D/g, "");
+    if (!/^\d{12}$/.test(cleanAadhaar)) throw new Error("Aadhaar must be exactly 12 digits");
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) throw new Error("Phone number must be a valid 10-digit mobile number");
+    const user = queryOne("SELECT * FROM users WHERE aadhaar = ? AND role = 'citizen'", [cleanAadhaar]);
+    if (!user) throw new Error("Citizen record not found");
+    const phones = parseJson(user.phoneNumbers, []);
+    if (!phones.includes(cleanPhone)) throw new Error("Aadhaar and phone number do not match");
+    return { citizenId: user.citizenId, name: user.name };
+  },
+};
 
+export const adminDirectoryApi = {
+  list: async () => {
+    await getDb();
     return {
-      message: "OTP generated (demo mode). Use the devOtp below.",
-      userId: lastInsertId(),
-      email: norm,
-      citizenUniqueId,
-      devOtp: otp,
+      admins: getAdminUsers().map((admin) => ({
+        id: String(admin.id),
+        name: admin.name,
+        email: admin.email,
+        department: admin.department,
+      })),
+    };
+  },
+};
+
+export const citizenApi = {
+  createMeetingRequest: async (body) => {
+    await getDb();
+    const user = requireRole("citizen");
+    const dbUser = queryOne("SELECT * FROM users WHERE id = ?", [Number(user.id)]);
+    const purpose = String(body.purpose || "").trim();
+    const referralAdminUserId = Number(body.referralAdminUserId || 0);
+    const referralAdmin = queryOne("SELECT * FROM users WHERE id = ? AND role = 'admin'", [referralAdminUserId]);
+    if (!purpose) throw new Error("Purpose of meeting is required");
+    if (!referralAdmin) throw new Error("Select an admin referral");
+    const now = ts();
+    const requestId = nextCode("MREQ", "meeting_requests");
+    execute(
+      `INSERT INTO meeting_requests (
+        requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleLocation,visitorId,meetingDocket,adminNotes,escalatedFromComplaintId,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        requestId,
+        Number(user.id),
+        JSON.stringify(getCitizenSnapshot(dbUser)),
+        purpose,
+        referralAdminUserId,
+        referralAdmin.name,
+        body.attachment?.name || "",
+        body.attachment?.type || "",
+        body.attachment?.data || "",
+        "submitted",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        body.escalatedFromComplaintId ? Number(body.escalatedFromComplaintId) : null,
+        now,
+        now,
+      ]
+    );
+    const meetingRow = queryOne("SELECT * FROM meeting_requests WHERE requestId = ?", [requestId]);
+    const meetingId = meetingRow?.id;
+    addLog("meeting_request", meetingId, "Meeting request submitted", purpose, user);
+    addNotificationForUsers(
+      getAdminUsers().map((admin) => admin.id),
+      "Meeting Request",
+      `New meeting request submitted by ${user.name}.`,
+      `/cases/meeting/${meetingId}`
+    );
+    return { meetingRequest: buildMeetingRequest(meetingRow) };
+  },
+
+  createComplaint: async (body) => {
+    await getDb();
+    const user = requireRole("citizen");
+    const dbUser = queryOne("SELECT * FROM users WHERE id = ?", [Number(user.id)]);
+    const title = String(body.title || "").trim();
+    const details = String(body.details || "").trim();
+    if (!title) throw new Error("Complaint title is required");
+    if (!details) throw new Error("Complaint details are required");
+    const now = ts();
+    const complaintCode = nextCode("COMP", "complaints");
+    execute(
+      `INSERT INTO complaints (
+        complaintId,citizenId,citizenSnapshot,title,details,attachments,resolutionDocs,status,assignedAdminUserId,assignedAdminName,referralAdminUserId,department,officerName,officerContact,manualContact,callScheduledAt,callOutcome,escalatedMeetingRequestId,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        complaintCode,
+        Number(user.id),
+        JSON.stringify(getCitizenSnapshot(dbUser)),
+        title,
+        details,
+        JSON.stringify(body.attachments || []),
+        JSON.stringify([]),
+        "pooled",
+        null,
+        "",
+        null,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        null,
+        now,
+        now,
+      ]
+    );
+    const complaintRow = queryOne("SELECT * FROM complaints WHERE complaintId = ?", [complaintCode]);
+    const complaintId = complaintRow?.id;
+    addLog("complaint", complaintId, "Complaint submitted", details, user);
+    addNotificationForUsers(
+      getAdminUsers().map((admin) => admin.id),
+      "Complaint Submitted",
+      `New complaint submitted by ${user.name}.`,
+      `/cases/complaint/${complaintId}`
+    );
+    return { complaint: buildComplaint(complaintRow) };
+  },
+
+  myItems: async () => {
+    await getDb();
+    const user = requireRole("citizen");
+    const meetings = queryAll("SELECT * FROM meeting_requests WHERE citizenId = ? ORDER BY createdAt DESC", [Number(user.id)]).map(buildMeetingRequest);
+    const complaints = queryAll("SELECT * FROM complaints WHERE citizenId = ? ORDER BY createdAt DESC", [Number(user.id)]).map(buildComplaint);
+    return { meetings, complaints };
+  },
+};
+
+export const workItemsApi = {
+  list: async () => {
+    await getDb();
+    const user = requireRole("admin");
+    const meetingRequests = queryAll("SELECT * FROM meeting_requests ORDER BY createdAt DESC").map(buildMeetingRequest);
+    const complaints = queryAll("SELECT * FROM complaints ORDER BY createdAt DESC").map(buildComplaint);
+    return {
+      meetingRequests,
+      complaints,
+      myAdminId: Number(user.id),
     };
   },
 
-  verifyOtp: async (email, otp) => {
+  getMeetingRequest: async (id) => {
     await getDb();
-    const norm = email.trim().toLowerCase();
-    const otpClean = String(otp).replace(/\D/g, "").trim();
-    if (!norm || !otpClean) throw new Error("Email and OTP are required");
+    requireRole("admin");
+    const row = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
+    if (!row) throw new Error("Meeting request not found");
+    return { meetingRequest: buildMeetingRequest(row) };
+  },
 
-    const user = queryOne("SELECT * FROM users WHERE email = ?", [norm]);
-    if (!user) throw new Error("No pending registration found for this email");
-    if (user.isVerified) return { message: "Email already verified. You can login." };
+  getComplaint: async (id) => {
+    await getDb();
+    requireRole("admin");
+    const row = queryOne("SELECT * FROM complaints WHERE id = ?", [Number(id)]);
+    if (!row) throw new Error("Complaint not found");
+    return { complaint: buildComplaint(row), contacts: queryAll("SELECT * FROM department_contacts ORDER BY department, officerName ASC") };
+  },
 
-    const record = queryOne("SELECT * FROM otps WHERE email = ? ORDER BY id DESC LIMIT 1", [norm]);
-    if (!record) throw new Error("No OTP found. Please resend OTP.");
-    if (new Date(record.expiresAt) < new Date()) {
-      execute("DELETE FROM otps WHERE email = ?", [norm]);
-      throw new Error("OTP has expired. Please request a new one.");
+  markMeetingVerificationNeeded: async (id, notes) => {
+    await getDb();
+    const user = requireRole("admin");
+    execute("UPDATE meeting_requests SET status='verification_needed', adminNotes=?, updatedAt=? WHERE id=?", [notes || "", ts(), Number(id)]);
+    addLog("meeting_request", id, "Verification requested", notes || "", user);
+    return workItemsApi.getMeetingRequest(id);
+  },
+
+  logMeetingVerificationOutcome: async (id, outcome) => {
+    await getDb();
+    const user = requireRole("admin");
+    if (!String(outcome || "").trim()) throw new Error("Verification call outcome is required");
+    execute(
+      "UPDATE meeting_requests SET status='under_review', verificationOutcome=?, updatedAt=? WHERE id=?",
+      [String(outcome).trim(), ts(), Number(id)]
+    );
+    addLog("meeting_request", id, "Verification completed", outcome, user);
+    return workItemsApi.getMeetingRequest(id);
+  },
+
+  approveMeetingRequest: async (id, adminNotes = "") => {
+    await getDb();
+    const user = requireRole("admin");
+    execute("UPDATE meeting_requests SET status='approved', adminNotes=?, updatedAt=? WHERE id=?", [adminNotes, ts(), Number(id)]);
+    const row = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
+    addLog("meeting_request", id, "Meeting approved", adminNotes, user);
+    addNotificationForUsers(
+      getAdminUsers().map((admin) => admin.id),
+      "Calendar Update",
+      `${row.requestId} was approved by ${user.name}.`,
+      `/cases/meeting/${id}`
+    );
+    return workItemsApi.getMeetingRequest(id);
+  },
+
+  scheduleMeetingRequest: async (id, payload) => {
+    await getDb();
+    const user = requireRole("admin");
+    const date = String(payload.scheduleDate || "").trim();
+    const time = String(payload.scheduleTime || "").trim();
+    const location = String(payload.scheduleLocation || "").trim();
+    if (!date || !time || !location) throw new Error("Date, time, and location are required");
+    const visitorId = `VIS-${new Date().getFullYear()}-${String(id).padStart(4, "0")}`;
+    const meetingDocket = `DOC-${new Date().getFullYear()}-${String(id).padStart(4, "0")}`;
+    execute(
+      `UPDATE meeting_requests
+       SET status='scheduled', scheduleDate=?, scheduleTime=?, scheduleLocation=?, visitorId=?, meetingDocket=?, adminNotes=?, updatedAt=?
+       WHERE id=?`,
+      [date, time, location, visitorId, meetingDocket, payload.adminNotes || "", ts(), Number(id)]
+    );
+    const row = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
+    addLog("meeting_request", id, "Meeting scheduled", `${date} ${time} at ${location}`, user);
+    addNotificationForUsers(
+      getAdminUsers().map((admin) => admin.id),
+      "Calendar Update",
+      `${row.requestId} was scheduled by ${user.name} for ${date} ${time}.`,
+      `/cases/meeting/${id}`
+    );
+    addNotificationForUsers(
+      getMinisterUsers().map((minister) => minister.id),
+      "Calendar Update",
+      `A minister meeting ${row.requestId} was scheduled for ${date} ${time}.`,
+      "/minister/calendar"
+    );
+    addNotificationForUsers([row.citizenId], "Calendar Update", `Your meeting ${row.requestId} has been scheduled.`, "");
+    return workItemsApi.getMeetingRequest(id);
+  },
+
+  rejectMeetingRequest: async (id, reason) => {
+    await getDb();
+    const user = requireRole("admin");
+    if (!String(reason || "").trim()) throw new Error("Reject reason is required");
+    execute("UPDATE meeting_requests SET status='rejected', rejectReason=?, updatedAt=? WHERE id=?", [reason.trim(), ts(), Number(id)]);
+    const row = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
+    addLog("meeting_request", id, "Meeting rejected", reason, user);
+    addNotificationForUsers([row.citizenId], "Meeting Request", `Your meeting request ${row.requestId} was rejected.`, "");
+    return workItemsApi.getMeetingRequest(id);
+  },
+
+  assignComplaintToSelf: async (id) => {
+    await getDb();
+    const user = requireRole("admin");
+    const row = queryOne("SELECT * FROM complaints WHERE id = ?", [Number(id)]);
+    if (!row) throw new Error("Complaint not found");
+    if (row.assignedAdminUserId && Number(row.assignedAdminUserId) !== Number(user.id)) {
+      throw new Error("This complaint is already assigned to another admin");
     }
-    if (String(record.otp) !== otpClean) throw new Error("Invalid OTP");
+    execute(
+      "UPDATE complaints SET assignedAdminUserId=?, assignedAdminName=?, status='assigned', updatedAt=? WHERE id=?",
+      [Number(user.id), user.name, ts(), Number(id)]
+    );
+    addLog("complaint", id, "Complaint assigned", `Assigned to ${user.name}`, user);
+    addNotificationForUsers([Number(user.id)], "Complaint Assigned", `Complaint ${row.complaintId} is now assigned to you.`, `/cases/complaint/${id}`);
+    return workItemsApi.getComplaint(id);
+  },
 
-    execute("UPDATE users SET isVerified = 1, updatedAt = ? WHERE email = ?", [ts(), norm]);
-    execute("DELETE FROM otps WHERE email = ?", [norm]);
-    const updated = queryOne("SELECT citizenUniqueId FROM users WHERE email = ?", [norm]);
+  updateComplaintDepartment: async (id, payload) => {
+    await getDb();
+    const user = requireRole("admin");
+    const department = String(payload.department || "").trim();
+    const officerName = String(payload.officerName || "").trim();
+    const officerContact = String(payload.officerContact || "").trim();
+    const manualContact = String(payload.manualContact || "").trim();
+    if (!department) throw new Error("Department is required");
+    if (!officerName && !manualContact) throw new Error("Select an officer or enter manual contact");
+    execute(
+      `UPDATE complaints
+       SET department=?, officerName=?, officerContact=?, manualContact=?, status='department_contact_identified', updatedAt=?
+       WHERE id=?`,
+      [department, officerName, officerContact, manualContact, ts(), Number(id)]
+    );
+    addLog("complaint", id, "Department contact identified", `${department} / ${officerName || manualContact}`, user);
+    return workItemsApi.getComplaint(id);
+  },
+
+  scheduleComplaintCall: async (id, callScheduledAt) => {
+    await getDb();
+    const user = requireRole("admin");
+    if (!String(callScheduledAt || "").trim()) throw new Error("Call schedule is required");
+    execute(
+      "UPDATE complaints SET callScheduledAt=?, status='call_scheduled', updatedAt=? WHERE id=?",
+      [callScheduledAt, ts(), Number(id)]
+    );
+    addLog("complaint", id, "Department call scheduled", callScheduledAt, user);
+    return workItemsApi.getComplaint(id);
+  },
+
+  logComplaintCallOutcome: async (id, outcome) => {
+    await getDb();
+    const user = requireRole("admin");
+    if (!String(outcome || "").trim()) throw new Error("Call outcome is required");
+    execute(
+      "UPDATE complaints SET callOutcome=?, status='followup_in_progress', updatedAt=? WHERE id=?",
+      [outcome.trim(), ts(), Number(id)]
+    );
+    addLog("complaint", id, "Department call outcome logged", outcome, user);
+    return workItemsApi.getComplaint(id);
+  },
+
+  resolveComplaint: async (id, payload) => {
+    await getDb();
+    const user = requireRole("admin");
+    execute(
+      "UPDATE complaints SET status='resolved', resolutionDocs=?, updatedAt=? WHERE id=?",
+      [JSON.stringify(payload.resolutionDocs || []), ts(), Number(id)]
+    );
+    const row = queryOne("SELECT * FROM complaints WHERE id = ?", [Number(id)]);
+    addLog("complaint", id, "Complaint resolved", "Resolution documents added", user);
+    addNotificationForUsers([row.citizenId], "Complaint Submitted", `Complaint ${row.complaintId} has been resolved.`, "");
+    return workItemsApi.getComplaint(id);
+  },
+
+  escalateComplaintToMeeting: async (id, payload) => {
+    await getDb();
+    const user = requireRole("admin");
+    const complaint = queryOne("SELECT * FROM complaints WHERE id = ?", [Number(id)]);
+    if (!complaint) throw new Error("Complaint not found");
+    const requestId = nextCode("MREQ", "meeting_requests");
+    execute(
+      `INSERT INTO meeting_requests (
+        requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleLocation,visitorId,meetingDocket,adminNotes,escalatedFromComplaintId,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        requestId,
+        complaint.citizenId,
+        complaint.citizenSnapshot,
+        payload.purpose || `Escalated from complaint ${complaint.complaintId}`,
+        Number(user.id),
+        user.name,
+        "",
+        "",
+        "",
+        "approved",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Admin escalation from complaint flow.",
+        Number(id),
+        ts(),
+        ts(),
+      ]
+    );
+    const meetingRequestRow = queryOne("SELECT * FROM meeting_requests WHERE requestId = ?", [requestId]);
+    const meetingRequestId = meetingRequestRow?.id;
+    execute(
+      "UPDATE complaints SET status='escalated_to_admin_meeting', escalatedMeetingRequestId=?, updatedAt=? WHERE id=?",
+      [meetingRequestId, ts(), Number(id)]
+    );
+    addLog("complaint", id, "Escalated to admin meeting", payload.purpose || "", user);
     return {
-      message: "Registration successful! You can now login with your Citizen ID.",
-      citizenUniqueId: updated?.citizenUniqueId,
+      complaint: buildComplaint(queryOne("SELECT * FROM complaints WHERE id = ?", [Number(id)])),
+      meetingRequest: buildMeetingRequest(meetingRequestRow),
+    };
+  },
+};
+
+export const meetingsApi = {
+  list: async () => {
+    await getDb();
+    const user = requireUser();
+    if (user.role === "deo") {
+      return {
+        events: queryAll("SELECT * FROM calendar_events ORDER BY scheduleAt DESC").map(buildCalendarEvent),
+      };
+    }
+    if (user.role === "admin") {
+      return {
+        meetings: queryAll("SELECT * FROM meeting_requests ORDER BY createdAt DESC").map(buildMeetingRequest),
+      };
+    }
+    const meetings = queryAll("SELECT * FROM meeting_requests WHERE citizenId=? ORDER BY createdAt DESC", [Number(user.id)]).map(buildMeetingRequest);
+    return { meetings };
+  },
+};
+
+export const calendarApi = {
+  list: async () => {
+    await getDb();
+    requireRole("deo");
+    return { events: queryAll("SELECT * FROM calendar_events ORDER BY scheduleAt DESC").map(buildCalendarEvent) };
+  },
+
+  create: async (body) => {
+    await getDb();
+    const user = requireRole("deo");
+    const title = String(body.title || "").trim();
+    const details = String(body.details || "").trim();
+    const eventType = String(body.eventType || "").trim();
+    const scheduleAt = String(body.scheduleAt || "").trim();
+    const endAt = String(body.endAt || "").trim();
+    if (!title || !details || !eventType || !scheduleAt || !endAt) {
+      throw new Error("Title, details, event type, start time, and end time are required");
+    }
+    const durationMinutes = Math.max(0, Math.round((new Date(endAt) - new Date(scheduleAt)) / 60000));
+    const classification = classifyEvent({ ...body, eventType });
+    const attendanceStatus = body.attendanceStatus || "planned";
+    const productivityScore = attendanceStatus === "attended"
+      ? calculateProductivityScore({ ...body, classification, durationMinutes })
+      : 0;
+    const createdAt = ts();
+    execute(
+      `INSERT INTO calendar_events (
+        title,details,eventType,scheduleAt,endAt,durationMinutes,department,mediaFolder,photos,documents,videoLink,attendanceStatus,attendedAt,classification,participationRole,portfolio,productivityScore,createdByUserId,createdByName,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        title,
+        details,
+        eventType,
+        scheduleAt,
+        endAt,
+        durationMinutes,
+        body.department || "",
+        body.mediaFolder || "",
+        JSON.stringify(body.photos || []),
+        JSON.stringify(body.documents || []),
+        body.videoLink || "",
+        attendanceStatus,
+        attendanceStatus === "attended" ? ts() : "",
+        classification,
+        body.participationRole || "Attendee",
+        body.portfolio || "Neither",
+        productivityScore,
+        Number(user.id),
+        user.name,
+        createdAt,
+        createdAt,
+      ]
+    );
+    const eventRow = queryOne(
+      "SELECT * FROM calendar_events WHERE title = ? AND createdByUserId = ? AND createdAt = ?",
+      [title, Number(user.id), createdAt]
+    );
+    const eventId = eventRow?.id;
+    const notificationType = eventType === "Invited Event" ? "Event Invitation" : "Calendar Update";
+    addNotificationForUsers(
+      getAdminUsers().map((admin) => admin.id),
+      notificationType,
+      `${title} was added to the calendar.`,
+      "/meetings"
+    );
+    addNotificationForUsers(
+      getMinisterUsers().map((minister) => minister.id),
+      notificationType,
+      `${title} was added to the minister calendar.`,
+      "/minister/calendar"
+    );
+    addNotificationForUsers(
+      getAdminUsers().map((admin) => admin.id),
+      "Calendar Update",
+      `Calendar updated with ${title}.`,
+      "/meetings"
+    );
+    addNotificationForUsers(
+      getMinisterUsers().map((minister) => minister.id),
+      "Calendar Update",
+      `Minister calendar updated with ${title}.`,
+      "/minister/calendar"
+    );
+    return { event: buildCalendarEvent(eventRow) };
+  },
+
+  markAttended: async (id) => {
+    await getDb();
+    requireRole("deo");
+    const row = queryOne("SELECT * FROM calendar_events WHERE id = ?", [Number(id)]);
+    if (!row) throw new Error("Event not found");
+    const classification = classifyEvent(row);
+    const productivityScore = calculateProductivityScore({ ...row, classification });
+    execute(
+      `UPDATE calendar_events
+       SET attendanceStatus='attended', attendedAt=?, classification=?, productivityScore=?, updatedAt=?
+       WHERE id=?`,
+      [ts(), classification, productivityScore, ts(), Number(id)]
+    );
+    addNotificationForUsers(
+      getAdminUsers().map((admin) => admin.id),
+      "Calendar Update",
+      `${row.title} was marked attended.`,
+      "/dashboard"
+    );
+    addNotificationForUsers(
+      getMinisterUsers().map((minister) => minister.id),
+      "Calendar Update",
+      `${row.title} attendance was marked and is now available on the minister dashboard.`,
+      "/minister/dashboard"
+    );
+    return { event: buildCalendarEvent(queryOne("SELECT * FROM calendar_events WHERE id = ?", [Number(id)])) };
+  },
+};
+
+export const notificationsApi = {
+  list: async () => {
+    await getDb();
+    const user = requireUser();
+    const notifications = queryAll("SELECT * FROM notifications WHERE userId = ? ORDER BY createdAt DESC", [Number(user.id)]).map((item) => ({
+      ...item,
+      isRead: !!item.isRead,
+    }));
+    return {
+      notifications,
+      unreadCount: notifications.filter((item) => !item.isRead).length,
     };
   },
 
-  resendOtp: async (email) => {
+  markRead: async (id) => {
     await getDb();
-    const norm = email.trim().toLowerCase();
-    if (!norm) throw new Error("Email is required");
-    const user = queryOne("SELECT * FROM users WHERE email = ? AND isVerified = 0", [norm]);
-    if (!user) throw new Error("No pending registration found for this email");
-    const otp = generateOtp();
-    execute("DELETE FROM otps WHERE email = ?", [norm]);
-    execute("INSERT INTO otps (email,otp,expiresAt) VALUES (?,?,?)", [
-      norm,
-      otp,
-      new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-    ]);
-    return { message: "New OTP sent (demo mode)", devOtp: otp };
+    requireUser();
+    execute("UPDATE notifications SET isRead = 1 WHERE id = ?", [Number(id)]);
   },
 
-  sendLoginOtp: async (payload) => {
+  markAllRead: async () => {
     await getDb();
-    const norm = (payload.email || "").trim().toLowerCase();
-    const phone = String(payload.phone || "").replace(/\D/g, "").trim();
-    if (!norm && !phone) throw new Error("Email or phone is required");
-    const user = norm
-      ? queryOne("SELECT * FROM users WHERE email = ? AND isVerified = 1", [norm])
-      : queryOne("SELECT * FROM users WHERE phone = ? AND isVerified = 1", [phone]);
-    if (!user) throw new Error("No verified account found");
-    const otp = generateOtp();
-    execute("DELETE FROM otps WHERE email = ?", [user.email]);
-    execute("INSERT INTO otps (email,otp,expiresAt) VALUES (?,?,?)", [
-      user.email,
-      otp,
-      new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-    ]);
-    return { message: "OTP generated (demo mode)", email: user.email, devOtp: otp };
-  },
-
-  loginWithOtp: async (payload) => {
-    await getDb();
-    const norm = (payload.email || "").trim().toLowerCase();
-    const otpClean = String(payload.otp || "").replace(/\D/g, "").trim();
-    if (!norm || !otpClean) throw new Error("Email and OTP are required");
-    const record = queryOne("SELECT * FROM otps WHERE email = ? ORDER BY id DESC LIMIT 1", [norm]);
-    if (!record) throw new Error("No OTP found. Request a new one.");
-    if (new Date(record.expiresAt) < new Date()) throw new Error("OTP has expired.");
-    if (String(record.otp) !== otpClean) throw new Error("Invalid OTP");
-    const user = queryOne("SELECT * FROM users WHERE email = ?", [norm]);
-    if (!user) throw new Error("User not found");
-    execute("DELETE FROM otps WHERE email = ?", [norm]);
-    const userData = {
-      id: String(user.id),
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      phone: user.phone,
-      gender: user.gender,
-      age: user.age,
-    };
-    return { message: "Login successful", token: `local-${user.id}`, user: userData };
+    const user = requireUser();
+    execute("UPDATE notifications SET isRead = 1 WHERE userId = ?", [Number(user.id)]);
   },
 };
 
 export const dashboardApi = {
   stats: async () => {
     await getDb();
-    const user = getCurrentUser();
-    const conditions = ["isDeleted = 0"];
-    const params = [];
-    if (user && user.role !== MASTER_ADMIN_ROLE.id && STAFF_ROLE_IDS.includes(user.role)) {
-      conditions.push("(assignedAdminRole = ? OR currentAdminRole = ?)");
-      params.push(user.role, user.role);
-    }
-    const where = `WHERE ${conditions.join(" AND ")}`;
-    const stats = queryOne(
-      `SELECT
-        COUNT(*) as totalCases,
-        SUM(CASE WHEN status IN ('RESOLVED','RESOLVED_WITHOUT_MEETING','CLOSED','REJECTED') THEN 1 ELSE 0 END) as resolved,
-        SUM(CASE WHEN schedule IS NOT NULL AND schedule != '' AND status IN ('APPROVED','SCHEDULED','CLOSURE_PENDING_MINISTER','CLOSED') THEN 1 ELSE 0 END) as scheduled
-       FROM cases ${where}`,
-      params
-    );
-    const recentCases = queryAll(`SELECT * FROM cases ${where} ORDER BY createdAt DESC LIMIT 5`, params).map(buildCaseRow);
-    return { ...stats, recentCases };
-  },
-};
-
-export const citizensApi = {
-  list: async (search = "", page = 1, limit = 20) => {
-    await getDb();
-    let sql = "SELECT * FROM users WHERE role = 'citizen' AND isVerified = 1";
-    const p = [];
-    if (search) {
-      sql += " AND (name LIKE ? OR email LIKE ? OR phone LIKE ?)";
-      const t = `%${search}%`;
-      p.push(t, t, t);
-    }
-    sql += ` ORDER BY createdAt DESC LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
-    return { citizens: queryAll(sql, p) };
-  },
-  create: async () => ({ message: "Not implemented in demo" }),
-};
-
-export const casesApi = {
-  list: async (params = {}) => {
-    await getDb();
-    const user = getCurrentUser();
-    const conds = [];
-    const p = [];
-
-    if (!user) throw new Error("Unauthorized");
-    if (user.role === "citizen") {
-      conds.push("citizenId = ?");
-      p.push(Number(user.id));
-    } else if (user.role !== MASTER_ADMIN_ROLE.id) {
-      conds.push("(assignedAdminRole = ? OR currentAdminRole = ?)");
-      p.push(user.role, user.role);
-    }
-
-    if (params.view === "archived") {
-      conds.push("isArchived = 1", "isDeleted != 1");
-    } else if (params.view === "deleted") {
-      conds.push("isDeleted = 1");
-    } else {
-      conds.push("isArchived != 1", "isDeleted != 1");
-    }
-
-    if (params.status) {
-      conds.push("status = ?");
-      p.push(params.status);
-    }
-
-    if (params.search && String(params.search).trim()) {
-      const t = `%${params.search.trim()}%`;
-      conds.push("(caseId LIKE ? OR purpose LIKE ? OR category LIKE ? OR assignedAdminRole LIKE ? OR citizenSnapshot LIKE ?)");
-      p.push(t, t, t, t, t);
-    }
-
-    const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
-    const rows = queryAll(`SELECT * FROM cases ${where} ORDER BY createdAt DESC`, p);
-    return { cases: rows.map(buildCaseRow) };
-  },
-
-  get: async (id) => {
-    await getDb();
-    const row = queryOne("SELECT * FROM cases WHERE id = ?", [Number(id)]);
-    if (!row) throw new Error("Case not found");
-    return { case: buildFullCase(row) };
-  },
-
-  create: async (body) => {
-    await getDb();
-    const user = getCurrentUser();
-    if (!user || user.role !== "citizen") throw new Error("Unauthorized");
-
-    const { purpose, category, referralRole, urgency, details, documents } = body;
-    if (!purpose?.trim() || !referralRole?.trim() || !details?.trim()) {
-      throw new Error("Referral admin, complaint title and complaint details are required");
-    }
-
-    const route = routeCaseForReferral(referralRole);
-    const userRow = queryOne("SELECT * FROM users WHERE id = ?", [Number(user.id)]);
-    const snap = JSON.stringify({
-      name: userRow?.name,
-      email: userRow?.email,
-      phone: userRow?.phone,
-      aadhaar: userRow?.aadhaar,
-      gender: userRow?.gender,
-      age: userRow?.age,
-    });
-    const docList = Array.isArray(documents) ? documents.filter((d) => d?.name && d?.url) : [];
-    const now = ts();
-
-    execute(
-      `INSERT INTO cases (
-        caseId,citizenId,citizenSnapshot,purpose,category,department,assignedAdminRole,currentAdminRole,currentAdminName,
-        details,urgency,documents,status,createdAt,updatedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        nextCaseId(),
-        Number(user.id),
-        snap,
-        purpose.trim(),
-        category?.trim() || "General Grievance",
-        route.roleLabel,
-        route.roleId,
-        route.roleId,
-        route.roleLabel,
-        details.trim(),
-        ["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(urgency) ? urgency : "MEDIUM",
-        JSON.stringify(docList),
-        "SUBMITTED",
-        now,
-        now,
-      ]
-    );
-
-    const newId = lastInsertId();
-    const created = queryOne("SELECT * FROM cases WHERE id = ?", [newId]);
-    addNotification(user.id, `Your case ${created.caseId} has been submitted successfully.`, newId, "CASE_CREATED");
-    const routedAdmin = queryOne("SELECT id FROM users WHERE role = ?", [route.roleId]);
-    if (routedAdmin?.id) {
-      addNotification(routedAdmin.id, `A new case ${created.caseId} was routed to your queue.`, newId, "CASE_CREATED");
-    }
-    return { message: "Case submitted successfully", case: buildCaseRow(created) };
-  },
-
-  review: async (caseId, payload) => {
-    await getDb();
-    const row = queryOne("SELECT * FROM cases WHERE id = ?", [Number(caseId)]);
-    if (!row) throw new Error("Case not found");
-    const { action, note, communications, comment, meeting } = payload;
-    const user = getCurrentUser();
-    const valid = ["APPROVE", "REJECT", "REQUEST_CLARIFICATION", "RESOLVE_WITHOUT_MEETING"];
-    if (!action || !valid.includes(action)) throw new Error(`action must be one of: ${valid.join(", ")}`);
-
-    let newStatus = row.status;
-    let reviewNote = note?.trim() || row.reviewNote || "";
-    let resolvedWithoutMeeting = row.resolvedWithoutMeeting || 0;
-    let schedule = row.schedule;
-    let closureType = row.closureType || "";
-    let closureRequestedAt = row.closureRequestedAt;
-
-    if (action === "APPROVE") {
-      newStatus = meeting?.scheduledAt ? "SCHEDULED" : "APPROVED";
-      schedule = meeting?.scheduledAt
-        ? JSON.stringify({
-            scheduledAt: new Date(meeting.scheduledAt).toISOString(),
-            slot: meeting.slot || "",
-            type: meeting.type || "",
-            venue: meeting.venue || "",
-            title: meeting.title || row.purpose,
-          })
-        : row.schedule;
-      resolvedWithoutMeeting = 0;
-      upsertMeeting(row, meeting);
-    } else if (action === "REJECT") {
-      newStatus = "REJECTION_PENDING_MINISTER";
-      closureType = "REJECTION";
-      closureRequestedAt = ts();
-    } else if (action === "REQUEST_CLARIFICATION") {
-      newStatus = "REQUEST_CLARIFICATION";
-    } else if (action === "RESOLVE_WITHOUT_MEETING") {
-      newStatus = "RESOLVED_WITHOUT_MEETING";
-      resolvedWithoutMeeting = 1;
-      schedule = null;
-    }
-
-    execute(
-      `UPDATE cases
-       SET status=?,reviewNote=?,resolvedWithoutMeeting=?,schedule=?,closureType=?,closureRequestedAt=?,updatedAt=?
-       WHERE id=?`,
-      [newStatus, reviewNote, resolvedWithoutMeeting, schedule, closureType, closureRequestedAt, ts(), row.id]
-    );
-
-    persistCommunications(row.id, communications, user?.name);
-    persistComment(row.id, comment, user);
-
-    addNotification(row.citizenId, `Case ${row.caseId} is now ${newStatus.replace(/_/g, " ").toLowerCase()}.`, row.id, "STATUS_CHANGE");
-    if (newStatus === "REJECTION_PENDING_MINISTER") {
-      const minister = queryOne("SELECT id FROM users WHERE role = ?", [MASTER_ADMIN_ROLE.id]);
-      if (minister?.id) {
-        addNotification(minister.id, `Rejection request received for ${row.caseId}.`, row.id, "STATUS_CHANGE");
-      }
-    }
-
-    const updated = queryOne("SELECT * FROM cases WHERE id = ?", [row.id]);
-    return { message: "Review updated", case: buildFullCase(updated) };
-  },
-
-  requestClosure: async (caseId, payload) => {
-    await getDb();
-    const row = queryOne("SELECT * FROM cases WHERE id = ?", [Number(caseId)]);
-    if (!row) throw new Error("Case not found");
-    const user = getCurrentUser();
-    const { meetingSummary, actionRequired, responsibleAuthority, communications, comment } = payload;
-
-    execute(
-      `UPDATE cases
-       SET meetingSummary=?,actionRequired=?,responsibleAuthority=?,status='CLOSURE_PENDING_MINISTER',
-           closureRequestedAt=?,closureType='CLOSURE',updatedAt=?
-       WHERE id=?`,
-      [
-        meetingSummary?.trim() || row.meetingSummary || "",
-        actionRequired?.trim() || row.actionRequired || "",
-        responsibleAuthority?.trim() || row.responsibleAuthority || "",
-        ts(),
-        ts(),
-        row.id,
-      ]
-    );
-
-    persistCommunications(row.id, communications, user?.name);
-    persistComment(row.id, comment, user);
-
-    const minister = queryOne("SELECT id FROM users WHERE role = ?", [MASTER_ADMIN_ROLE.id]);
-    if (minister?.id) {
-      addNotification(minister.id, `Closure request received for ${row.caseId}.`, row.id, "STATUS_CHANGE");
-    }
-    addNotification(row.citizenId, `Closure request for case ${row.caseId} has been sent to the minister.`, row.id, "STATUS_CHANGE");
-    const updated = queryOne("SELECT * FROM cases WHERE id = ?", [row.id]);
-    return { message: "Closure request sent", case: buildFullCase(updated) };
-  },
-
-  ministerReview: async (caseId, payload) => {
-    await getDb();
-    const row = queryOne("SELECT * FROM cases WHERE id = ?", [Number(caseId)]);
-    if (!row) throw new Error("Case not found");
-    const { action, note } = payload;
-    if (!["APPROVE", "SEND_BACK"].includes(action)) throw new Error("Invalid minister action");
-
-    let status = row.status;
-    let ministerDecisionNote = note?.trim() || row.ministerDecisionNote || "";
-    let reopenedCount = Number(row.reopenedCount || 0);
-
-    if (action === "APPROVE") {
-      status = row.closureType === "REJECTION" ? "REJECTED" : "CLOSED";
-    } else {
-      status = "REOPENED";
-      reopenedCount += 1;
-    }
-
-    execute(
-      "UPDATE cases SET status=?,ministerDecisionNote=?,reopenedCount=?,updatedAt=? WHERE id=?",
-      [status, ministerDecisionNote, reopenedCount, ts(), row.id]
-    );
-
-    const adminUser = queryOne("SELECT id FROM users WHERE role = ?", [row.currentAdminRole]);
-    if (adminUser?.id) {
-      addNotification(
-        adminUser.id,
-        action === "APPROVE"
-          ? `Minister approved ${row.closureType === "REJECTION" ? "rejection" : "closure"} for ${row.caseId}.`
-          : `Minister sent ${row.caseId} back for re-evaluation.`,
-        row.id,
-        "STATUS_CHANGE"
-      );
-    }
-    addNotification(
-      row.citizenId,
-      action === "APPROVE"
-        ? `Your case ${row.caseId} has been ${row.closureType === "REJECTION" ? "rejected" : "closed"}.`
-        : `Your case ${row.caseId} has been sent back for admin re-evaluation.`,
-      row.id,
-      "STATUS_CHANGE"
-    );
-
-    const updated = queryOne("SELECT * FROM cases WHERE id = ?", [row.id]);
-    return { message: "Minister review saved", case: buildFullCase(updated) };
-  },
-
-  escalate: async (caseId, payload) => {
-    await getDb();
-    const row = queryOne("SELECT * FROM cases WHERE id = ?", [Number(caseId)]);
-    if (!row) throw new Error("Case not found");
-    const nextRole = payload?.role;
-    if (!ADMIN_ROLES.some((item) => item.id === nextRole)) throw new Error("Invalid admin role");
-    if (nextRole === row.currentAdminRole) throw new Error("Select a different admin");
-    const reason = payload?.reason?.trim() || "";
-
-    execute(
-      `UPDATE cases
-       SET currentAdminRole=?,currentAdminName=?,status='ESCALATED',escalationReason=?,updatedAt=?
-       WHERE id=?`,
-      [nextRole, getRoleLabel(nextRole), reason, ts(), row.id]
-    );
-
-    const nextUser = queryOne("SELECT id FROM users WHERE role = ?", [nextRole]);
-    if (nextUser?.id) {
-      addNotification(nextUser.id, `Case ${row.caseId} has been escalated to your queue.`, row.id, "STATUS_CHANGE");
-    }
-    addNotification(row.citizenId, `Case ${row.caseId} has been escalated for re-evaluation.`, row.id, "STATUS_CHANGE");
-    const updated = queryOne("SELECT * FROM cases WHERE id = ?", [row.id]);
-    return { message: "Case escalated", case: buildFullCase(updated) };
-  },
-
-  schedule: async (caseId, payload) => {
-    await getDb();
-    const row = queryOne("SELECT * FROM cases WHERE id = ?", [Number(caseId)]);
-    if (!row) throw new Error("Case not found");
-    if (!payload?.scheduledAt) throw new Error("scheduledAt is required");
-    const schedule = JSON.stringify({
-      scheduledAt: new Date(payload.scheduledAt).toISOString(),
-      slot: payload.slot || "",
-      type: payload.type || "",
-      venue: payload.venue || "",
-      title: payload.title || row.purpose,
-    });
-    execute("UPDATE cases SET schedule=?,status='SCHEDULED',updatedAt=? WHERE id=?", [schedule, ts(), row.id]);
-    upsertMeeting(row, payload);
-    const updated = queryOne("SELECT * FROM cases WHERE id = ?", [row.id]);
-    return { message: "Schedule updated", case: buildFullCase(updated) };
-  },
-
-  complete: async (caseId, payload) => {
-    await getDb();
-    return casesApi.requestClosure(caseId, payload);
-  },
-
-  authorize: async (id, payload) => casesApi.review(id, payload),
-  checkin: async () => ({ message: "OK" }),
-  close: async (id, payload) => casesApi.requestClosure(id, payload),
-
-  updateStatus: async (caseId, status) => {
-    await getDb();
-    execute("UPDATE cases SET status=?,updatedAt=? WHERE id=?", [status, ts(), Number(caseId)]);
-    const updated = queryOne("SELECT * FROM cases WHERE id = ?", [Number(caseId)]);
-    return { message: "Status updated", case: buildFullCase(updated) };
-  },
-
-  addComment: async (caseId, body) => {
-    await getDb();
-    const row = queryOne("SELECT * FROM cases WHERE id = ?", [Number(caseId)]);
-    if (!row) throw new Error("Case not found");
-    const user = getCurrentUser();
-    persistComment(caseId, body?.comment, user);
-    const updated = queryOne("SELECT * FROM cases WHERE id = ?", [Number(caseId)]);
-    return { message: "Comment added", case: buildFullCase(updated) };
-  },
-
-  bulkArchive: async (ids) => {
-    await getDb();
-    const ph = ids.map(() => "?").join(",");
-    execute(`UPDATE cases SET isArchived=1,updatedAt=? WHERE id IN (${ph})`, [ts(), ...ids.map(Number)]);
-    return { message: `${ids.length} case(s) archived` };
-  },
-  bulkUnarchive: async (ids) => {
-    await getDb();
-    const ph = ids.map(() => "?").join(",");
-    execute(`UPDATE cases SET isArchived=0,updatedAt=? WHERE id IN (${ph})`, [ts(), ...ids.map(Number)]);
-    return { message: `${ids.length} case(s) restored from archive` };
-  },
-  bulkDelete: async (ids) => {
-    await getDb();
-    const ph = ids.map(() => "?").join(",");
-    execute(`UPDATE cases SET isDeleted=1,updatedAt=? WHERE id IN (${ph})`, [ts(), ...ids.map(Number)]);
-    return { message: `${ids.length} case(s) deleted` };
-  },
-  bulkRestore: async (ids) => {
-    await getDb();
-    const ph = ids.map(() => "?").join(",");
-    execute(`UPDATE cases SET isDeleted=0,isArchived=0,updatedAt=? WHERE id IN (${ph})`, [ts(), ...ids.map(Number)]);
-    return { message: `${ids.length} case(s) restored` };
-  },
-  bulkPermanentDelete: async (ids) => {
-    await getDb();
-    const ph = ids.map(() => "?").join(",");
-    execute(`DELETE FROM cases WHERE isDeleted=1 AND id IN (${ph})`, ids.map(Number));
-    return { message: `${ids.length} case(s) permanently deleted` };
-  },
-};
-
-export const communicationsApi = {
-  list: async (caseId) => {
-    await getDb();
+    requireRole("admin");
+    const events = queryAll("SELECT * FROM calendar_events").map(buildCalendarEvent);
+    const complaints = queryAll("SELECT * FROM complaints").map(buildComplaint);
+    const meetingRequests = queryAll("SELECT * FROM meeting_requests").map(buildMeetingRequest);
+    const analytics = buildAnalytics(events, complaints, meetingRequests);
+    const today = new Date().toISOString().slice(0, 10);
+    const currentDate = new Date();
+    const weekStart = new Date(currentDate);
+    const day = weekStart.getDay();
+    const diff = weekStart.getDate() - day + (day === 0 ? -6 : 1);
+    weekStart.setDate(diff);
+    const weekKey = weekStart.toISOString().slice(0, 10);
+    const monthPrefix = new Date().toISOString().slice(0, 7);
     return {
-      communications: queryAll("SELECT * FROM communications WHERE caseId = ? ORDER BY createdAt DESC", [Number(caseId)]),
+      analytics,
+      totalCases: complaints.length + meetingRequests.length,
+      resolved: complaints.filter((item) => item.status === "resolved").length,
+      scheduled: meetingRequests.filter((item) => item.status === "scheduled").length,
+      dailyScore: analytics.dailyScores.find((row) => row.date === today)?.score || 0,
+      weeklyScore: analytics.weeklyScores.find((row) => row.week === weekKey)?.score || 0,
+      monthlyScore: analytics.monthlyScores.find((row) => row.month === monthPrefix)?.score || 0,
     };
   },
-
-  create: async (caseId, body) => {
-    await getDb();
-    const row = queryOne("SELECT * FROM cases WHERE id = ?", [Number(caseId)]);
-    if (!row) throw new Error("Case not found");
-    const user = getCurrentUser();
-    persistCommunications(caseId, [body], user?.name);
-    const updated = queryOne("SELECT * FROM cases WHERE id = ?", [Number(caseId)]);
-    return { message: "Communication logged", case: buildFullCase(updated) };
-  },
 };
 
-export const departmentApi = {
-  overview: async () => {
+export const ministerViewApi = {
+  dashboard: async () => {
     await getDb();
-    const departments = getDepartmentRows();
-    const ownerGroups = splitDepartmentsAcrossAdmins(departments);
-    const ownerMap = ownerGroups.reduce((acc, role) => {
-      role.departments.forEach((department) => {
-        acc[department.id] = {
-          adminRole: role.id,
-          adminLabel: role.label,
-        };
-      });
-      return acc;
-    }, {});
-
-    const result = departments.map((dept) => {
-      const stats = queryOne(
-        `SELECT COUNT(*) as totalCases,
-                SUM(CASE WHEN status='SUBMITTED' THEN 1 ELSE 0 END) as submitted
-         FROM cases WHERE LOWER(department)=LOWER(?)`,
-        [dept.name]
-      );
-      return {
-        ...dept,
-        totalCases: stats?.totalCases || 0,
-        submitted: stats?.submitted || 0,
-        adminRole: ownerMap[dept.id]?.adminRole,
-        adminLabel: ownerMap[dept.id]?.adminLabel,
-      };
-    });
-    return {
-      departments: result,
-      adminGroups: ownerGroups.map((group) => ({
-        roleId: group.id,
-        roleLabel: group.label,
-        departments: group.departments.map((dept) => ({
-          ...dept,
-          totalCases: result.find((item) => item.id === dept.id)?.totalCases || 0,
-          submitted: result.find((item) => item.id === dept.id)?.submitted || 0,
-        })),
+    requireRole("minister");
+    const events = queryAll("SELECT * FROM calendar_events ORDER BY scheduleAt DESC").map(buildCalendarEvent);
+    const scheduledMeetings = queryAll("SELECT * FROM meeting_requests WHERE status='scheduled' ORDER BY scheduleDate ASC, scheduleTime ASC").map(buildMeetingRequest);
+    const complaints = queryAll("SELECT * FROM complaints").map(buildComplaint);
+    const analytics = buildAnalytics(events, complaints, scheduledMeetings);
+    const upcomingAgenda = [
+      ...events.map((event) => ({
+        id: `event-${event._id}`,
+        title: event.title,
+        when: event.scheduleAt,
+        type: event.eventType,
+        location: event.department || event.mediaFolder || "",
       })),
-    };
-  },
+      ...scheduledMeetings.map((meeting) => ({
+        id: `meeting-${meeting._id}`,
+        title: meeting.purpose,
+        when: `${meeting.scheduleDate}T${meeting.scheduleTime || "09:00"}`,
+        type: "Minister Meeting",
+        location: meeting.scheduleLocation || "",
+      })),
+    ]
+      .sort((a, b) => new Date(a.when) - new Date(b.when))
+      .slice(0, 8);
 
-  create: async (body) => {
-    await getDb();
-    const name = (body.name || "").trim();
-    const state = (body.state || "").trim();
-    const ministerName = (body.ministerName || "").trim();
-    if (!name || !state || !ministerName) throw new Error("Name, state and minister name are required");
-    const exists = queryOne(
-      "SELECT id FROM departments WHERE LOWER(name)=LOWER(?) AND LOWER(state)=LOWER(?) AND LOWER(ministerName)=LOWER(?)",
-      [name, state, ministerName]
-    );
-    if (exists) throw new Error("Department already exists");
-    const now = ts();
-    execute("INSERT INTO departments (name,state,ministerName,createdAt,updatedAt) VALUES (?,?,?,?,?)", [name, state, ministerName, now, now]);
-    const id = lastInsertId();
-    return { message: "Department added successfully", department: queryOne("SELECT * FROM departments WHERE id = ?", [id]) };
-  },
-
-  options: async () => {
-    await getDb();
-    const departments = getDepartmentRows();
     return {
-      departments: departments.map((dept) => {
-        const owner = getDepartmentOwner(departments, dept.name);
-        return {
-          id: String(dept.id),
-          name: dept.name,
-          adminRole: owner?.roleId || "",
-          adminLabel: owner?.roleLabel || "",
-        };
-      }),
+      analytics,
+      totalEvents: events.length,
+      attendedEvents: events.filter((event) => event.attendanceStatus === "attended").length,
+      scheduledMeetings: scheduledMeetings.length,
+      invitedEvents: events.filter((event) => event.eventType === "Invited Event").length,
+      upcomingAgenda,
     };
   },
-};
 
-export const assignmentsApi = {
-  list: async () => ({ assignments: [] }),
-  create: async () => ({ message: "Assignments removed from the active case flow" }),
-  update: async () => ({ message: "Assignments removed from the active case flow" }),
-};
-
-export const notificationsApi = {
-  list: async () => {
+  calendar: async () => {
     await getDb();
-    const user = getCurrentUser();
-    if (!user) return { notifications: [], unreadCount: 0 };
-    const notifications = queryAll("SELECT * FROM notifications WHERE userId = ? ORDER BY createdAt DESC LIMIT 50", [Number(user.id)]);
-    const unread = queryOne("SELECT COUNT(*) as cnt FROM notifications WHERE userId = ? AND isRead = 0", [Number(user.id)]);
-    return { notifications, unreadCount: unread?.cnt || 0 };
+    requireRole("minister");
+    const events = queryAll("SELECT * FROM calendar_events ORDER BY scheduleAt DESC").map(buildCalendarEvent);
+    const meetings = queryAll("SELECT * FROM meeting_requests WHERE status='scheduled' ORDER BY scheduleDate ASC, scheduleTime ASC").map(buildMeetingRequest);
+    const calendarItems = [
+      ...events.map((event) => ({
+        id: `event-${event._id}`,
+        sourceKind: "deo_event",
+        sourceId: event._id,
+        title: event.title,
+        details: event.details,
+        type: event.eventType,
+        startsAt: event.scheduleAt,
+        endsAt: event.endAt,
+        location: event.department || event.mediaFolder || "",
+        source: "DEO Calendar",
+        videoLink: event.videoLink || "",
+        files: [...(event.documents || []), ...(event.photos || [])],
+      })),
+      ...meetings.map((meeting) => ({
+        id: `meeting-${meeting._id}`,
+        sourceKind: "minister_meeting",
+        sourceId: meeting._id,
+        title: meeting.purpose,
+        details: `Citizen: ${meeting.citizenSnapshot?.name || "Citizen"} · Visitor ID: ${meeting.visitorId || "Pending"} · Docket: ${meeting.meetingDocket || "Pending"}`,
+        type: "Minister Meeting",
+        startsAt: `${meeting.scheduleDate}T${meeting.scheduleTime || "09:00"}`,
+        endsAt: `${meeting.scheduleDate}T${meeting.scheduleTime || "09:30"}`,
+        location: meeting.scheduleLocation || "",
+        source: "Approved Meeting Request",
+        videoLink: "",
+        files: meeting.attachment ? [meeting.attachment] : [],
+      })),
+    ].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+
+    return { calendarItems };
   },
 
-  markRead: async (id) => {
+  updateCalendarItem: async (payload) => {
     await getDb();
-    execute("UPDATE notifications SET isRead = 1 WHERE id = ?", [Number(id)]);
-    return { notification: queryOne("SELECT * FROM notifications WHERE id = ?", [Number(id)]) };
-  },
+    requireRole("minister");
+    const sourceKind = payload?.sourceKind;
+    const sourceId = Number(payload?.sourceId || 0);
+    if (!sourceKind || !sourceId) throw new Error("Calendar item reference is required");
 
-  markAllRead: async () => {
-    await getDb();
-    const user = getCurrentUser();
-    if (user) execute("UPDATE notifications SET isRead = 1 WHERE userId = ? AND isRead = 0", [Number(user.id)]);
-    return { message: "All marked as read" };
-  },
-};
-
-export const authorityApi = {
-  suggestions: async () => ({ officials: [], suggestedDepartment: null, categoryMap: {} }),
-};
-
-export const meetingsApi = {
-  list: async () => {
-    await getDb();
-    return { meetings: queryAll("SELECT * FROM meetings ORDER BY createdAt DESC") };
-  },
-
-  create: async (body) => {
-    await getDb();
-    const { caseId, caseNumber, department, title, assignedToName, priority, dueDate } = body;
-    if (!department || !title) throw new Error("department and title are required");
-    const validP = ["LOW", "MEDIUM", "HIGH", "URGENT", "CRITICAL"];
-    const now = ts();
-    execute(
-      "INSERT INTO meetings (caseId,caseNumber,department,title,assignedToName,priority,dueDate,status,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)",
-      [caseId ? Number(caseId) : null, caseNumber || "", department, title, assignedToName || "", validP.includes(priority) ? priority : "MEDIUM", dueDate || null, "PENDING", now, now]
-    );
-    return { message: "Meeting invite created", meeting: queryOne("SELECT * FROM meetings WHERE id = ?", [lastInsertId()]) };
-  },
-
-  updateStatus: async (id, status) => {
-    await getDb();
-    const valid = ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"];
-    if (status && valid.includes(status)) {
-      execute("UPDATE meetings SET status=?,updatedAt=? WHERE id=?", [status, ts(), Number(id)]);
+    if (sourceKind === "deo_event") {
+      execute(
+        `UPDATE calendar_events
+         SET title=?, details=?, scheduleAt=?, endAt=?, department=?, updatedAt=?
+         WHERE id=?`,
+        [
+          String(payload.title || "").trim(),
+          String(payload.details || "").trim(),
+          String(payload.startsAt || "").trim(),
+          String(payload.endsAt || "").trim(),
+          String(payload.location || "").trim(),
+          ts(),
+          sourceId,
+        ]
+      );
+    } else if (sourceKind === "minister_meeting") {
+      const startsAt = new Date(payload.startsAt);
+      const endsAt = new Date(payload.endsAt || payload.startsAt);
+      execute(
+        `UPDATE meeting_requests
+         SET purpose=?, scheduleDate=?, scheduleTime=?, scheduleLocation=?, adminNotes=?, updatedAt=?
+         WHERE id=?`,
+        [
+          String(payload.title || "").trim(),
+          startsAt.toISOString().slice(0, 10),
+          startsAt.toTimeString().slice(0, 5),
+          String(payload.location || "").trim(),
+          String(payload.details || "").trim(),
+          ts(),
+          sourceId,
+        ]
+      );
+    } else {
+      throw new Error("Unsupported calendar item type");
     }
-    const meeting = queryOne("SELECT * FROM meetings WHERE id = ?", [Number(id)]);
-    if (!meeting) throw new Error("Meeting not found");
-    return { message: "Meeting updated", meeting };
-  },
-};
 
-export const referenceApi = {
-  referringOfficers: async () => ({ officers: [] }),
-  referenceModes: async () => ({ modes: [] }),
-  requestCategories: async () => ({ categories: [] }),
-  states: async () => ({ states: [] }),
-  districts: async () => ({ districts: [] }),
-};
-
-export const employeesApi = {
-  list: async (params = {}) => {
-    await getDb();
-    let sql = "SELECT * FROM employees";
-    const conds = [];
-    const p = [];
-    if (params.search) {
-      const t = `%${params.search}%`;
-      conds.push("(name LIKE ? OR role LIKE ? OR department LIKE ? OR email LIKE ?)");
-      p.push(t, t, t, t);
-    }
-    if (params.status === "active") conds.push("isActive = 1");
-    if (params.status === "inactive") conds.push("isActive = 0");
-    if (params.department && params.department !== "all") {
-      conds.push("department = ?");
-      p.push(params.department);
-    }
-    if (conds.length) sql += ` WHERE ${conds.join(" AND ")}`;
-    sql += " ORDER BY createdAt DESC";
-    const employees = queryAll(sql, p);
-    employees.forEach((employee) => {
-      employee.isActive = !!employee.isActive;
-    });
-    return { employees };
-  },
-
-  create: async (body) => {
-    await getDb();
-    const { name, role, email, phone, department, location, salary, joinDate, profileImg } = body;
-    if (!name || !role || !email || !phone || !department || !location) {
-      throw new Error("Name, role, email, phone, department and location are required");
-    }
-    const exists = queryOne("SELECT id FROM employees WHERE email = ?", [email.toLowerCase().trim()]);
-    if (exists) throw new Error("Employee with this email already exists");
-    const now = ts();
-    execute(
-      "INSERT INTO employees (name,role,email,phone,department,location,salary,joinDate,profileImg,isActive,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,1,?,?)",
-      [name, role, email.toLowerCase().trim(), phone, department, location, salary || "", joinDate || now, profileImg || "", now, now]
-    );
-    const employee = queryOne("SELECT * FROM employees WHERE id = ?", [lastInsertId()]);
-    employee.isActive = !!employee.isActive;
-    return { message: "Employee added successfully", employee };
-  },
-
-  setStatus: async (id, isActive) => {
-    await getDb();
-    execute("UPDATE employees SET isActive=?,updatedAt=? WHERE id=?", [isActive ? 1 : 0, ts(), Number(id)]);
-    const employee = queryOne("SELECT * FROM employees WHERE id = ?", [Number(id)]);
-    if (!employee) throw new Error("Employee not found");
-    employee.isActive = !!employee.isActive;
-    return { message: "Status updated", employee };
+    return ministerViewApi.calendar();
   },
 };
