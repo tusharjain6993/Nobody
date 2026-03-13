@@ -45,7 +45,6 @@ export default function HCMCasesListPage() {
     + data.meetingRequests.filter((item) => Number(item.referralAdminUserId || 0) === Number(data.myAdminId || 0) && !["scheduled", "rejected"].includes(item.status)).length;
   const rejectedMeetingCount = data.meetingRequests.filter((item) => item.status === "rejected").length;
   const completedCaseCount = data.complaints.filter((item) => item.status === "completed").length;
-
   return (
     <div className="p-6 max-w-[1240px] mx-auto">
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-5">
