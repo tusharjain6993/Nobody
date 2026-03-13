@@ -95,6 +95,10 @@ function getMinisterUsers() {
   return queryAll("SELECT * FROM users WHERE role = 'minister' ORDER BY id ASC");
 }
 
+function getDeoUsers() {
+  return queryAll("SELECT * FROM users WHERE role = 'deo' ORDER BY id ASC");
+}
+
 function addNotificationForUsers(userIds, type, message, link = "") {
   const now = ts();
   Array.from(new Set(userIds.map(Number))).forEach((userId) => {
@@ -443,7 +447,16 @@ export const workItemsApi = {
     await getDb();
     const user = requireRole("admin");
     execute("UPDATE meeting_requests SET status='verification_needed', adminNotes=?, updatedAt=? WHERE id=?", [notes || "", ts(), Number(id)]);
+    const row = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
+    const snapshot = parseJson(row?.citizenSnapshot, {});
+    const phone = snapshot.phoneNumbers?.[0] || "No phone available";
     addLog("meeting_request", id, "Verification requested", notes || "", user);
+    addNotificationForUsers(
+      getDeoUsers().map((deo) => deo.id),
+      "Verification Needed",
+      `Call citizen ${snapshot.citizenId || "Unknown"} on ${phone} for meeting ${row?.requestId || ""}.`,
+      `/cases/meeting/${id}?action=logVerification`
+    );
     return workItemsApi.getMeetingRequest(id);
   },
 
@@ -459,10 +472,17 @@ export const workItemsApi = {
     return workItemsApi.getMeetingRequest(id);
   },
 
-  approveMeetingRequest: async (id, adminNotes = "") => {
+  approveMeetingRequest: async (id, payload = {}) => {
     await getDb();
     const user = requireRole("admin");
-    execute("UPDATE meeting_requests SET status='approved', adminNotes=?, updatedAt=? WHERE id=?", [adminNotes, ts(), Number(id)]);
+    const scheduleDate = String(payload.scheduleDate || "").trim();
+    const scheduleTime = String(payload.scheduleTime || "").trim();
+    const adminNotes = String(payload.adminNotes || "").trim();
+    if (!scheduleDate || !scheduleTime) throw new Error("Approve requires meeting date and time");
+    execute(
+      "UPDATE meeting_requests SET status='approved', adminNotes=?, scheduleDate=?, scheduleTime=?, updatedAt=? WHERE id=?",
+      [adminNotes, scheduleDate, scheduleTime, ts(), Number(id)]
+    );
     const row = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
     addLog("meeting_request", id, "Meeting approved", adminNotes, user);
     addNotificationForUsers(
@@ -510,8 +530,7 @@ export const workItemsApi = {
   rejectMeetingRequest: async (id, reason) => {
     await getDb();
     const user = requireRole("admin");
-    if (!String(reason || "").trim()) throw new Error("Reject reason is required");
-    execute("UPDATE meeting_requests SET status='rejected', rejectReason=?, updatedAt=? WHERE id=?", [reason.trim(), ts(), Number(id)]);
+    execute("UPDATE meeting_requests SET status='rejected', rejectReason=?, updatedAt=? WHERE id=?", [String(reason || "").trim(), ts(), Number(id)]);
     const row = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
     addLog("meeting_request", id, "Meeting rejected", reason, user);
     addNotificationForUsers([row.citizenId], "Meeting Request", `Your meeting request ${row.requestId} was rejected.`, "");

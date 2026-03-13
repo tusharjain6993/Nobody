@@ -5,12 +5,22 @@ import { filesToDocuments } from "../../utils/fileHelpers";
 
 const inputClass = "text-[0.78rem] px-2.5 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none";
 
+function statusBadgeClass(status) {
+  if (status === "scheduled") return "bg-emerald-100 text-emerald-700";
+  if (status === "approved") return "bg-sky-100 text-sky-700";
+  if (status === "verification_needed") return "bg-amber-100 text-amber-700";
+  if (status === "verification_completed") return "bg-cyan-100 text-cyan-700";
+  if (status === "rejected") return "bg-rose-100 text-rose-700";
+  return "bg-slate-100 text-slate-700";
+}
+
 export default function MeetingsPage() {
   const { user } = useHCMAuth();
   const [events, setEvents] = useState([]);
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedMeetingId, setSelectedMeetingId] = useState("");
   const [form, setForm] = useState({
     title: "",
     details: "",
@@ -48,7 +58,242 @@ export default function MeetingsPage() {
     return () => { mounted = false; };
   }, [user?.role]);
 
-  if (user?.role !== "deo") {
+  if (user?.role === "citizen") {
+    const citizenMeetings = [...meetings].sort((left, right) => {
+      const leftDate = new Date(left.updatedAt || left.createdAt || 0).getTime();
+      const rightDate = new Date(right.updatedAt || right.createdAt || 0).getTime();
+      return rightDate - leftDate;
+    });
+    const selectedMeeting = citizenMeetings.find((meeting) => String(meeting._id) === String(selectedMeetingId)) || citizenMeetings[0] || null;
+
+    return (
+      <div className="p-6 max-w-[1320px] mx-auto space-y-5">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-2">
+          <div>
+            <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-1">My Meetings</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-3xl">
+              Track every meeting request here. Any approval, verification, rejection, schedule, visitor ID, docket, and admin note update is reflected on this page.
+            </p>
+          </div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            Total requests: <span className="font-semibold text-slate-700 dark:text-slate-200">{citizenMeetings.length}</span>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="text-sm text-slate-500 py-8 text-center">Loading meetings…</div>
+        ) : citizenMeetings.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 rounded-[24px] border border-slate-200 dark:border-slate-700 shadow-sm p-10 text-center">
+            <p className="text-sm text-slate-500 dark:text-slate-400">You have not submitted any meeting requests yet.</p>
+          </div>
+        ) : (
+          <>
+            <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-700">
+                    <tr className="text-[0.68rem] tracking-[0.16em] text-slate-500 dark:text-slate-400 uppercase">
+                      <th className="px-4 py-4 text-left">Task ID</th>
+                      <th className="px-4 py-4 text-left">Subject</th>
+                      <th className="px-4 py-4 text-left">Department</th>
+                      <th className="px-4 py-4 text-left">Priority</th>
+                      <th className="px-4 py-4 text-left">Status</th>
+                      <th className="px-4 py-4 text-left">Holder</th>
+                      <th className="px-4 py-4 text-left">Officer</th>
+                      <th className="px-4 py-4 text-left">Start Date</th>
+                      <th className="px-4 py-4 text-left">Due Date</th>
+                      <th className="px-4 py-4 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {citizenMeetings.map((meeting) => {
+                      const isSelected = String(selectedMeeting?._id || "") === String(meeting._id);
+                      return (
+                        <tr key={meeting._id} className={`border-b border-slate-100 dark:border-slate-800 last:border-b-0 ${isSelected ? "bg-indigo-50/60 dark:bg-slate-800/80" : "bg-white dark:bg-slate-900"}`}>
+                          <td className="px-4 py-4 align-top text-[0.76rem] font-semibold text-slate-500 dark:text-slate-400">{meeting.requestId}</td>
+                          <td className="px-4 py-4 align-top">
+                            <div className="font-semibold text-slate-900 dark:text-slate-100">{meeting.purpose}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                              {meeting.scheduleLocation || meeting.adminNotes || "Awaiting admin update"}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 align-top text-slate-600 dark:text-slate-300">
+                            {meeting.referralAdminName || meeting.assignedAdminName || "General Admin Pool"}
+                          </td>
+                          <td className="px-4 py-4 align-top">
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[0.7rem] font-semibold bg-violet-100 text-violet-700">
+                              {meeting.status === "rejected" ? "High" : meeting.status === "scheduled" ? "Planned" : "Standard"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 align-top">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[0.72rem] font-semibold ${statusBadgeClass(meeting.status)}`}>
+                              {meeting.statusLabel}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 align-top text-slate-600 dark:text-slate-300">Admin</td>
+                          <td className="px-4 py-4 align-top text-slate-600 dark:text-slate-300">
+                            {meeting.assignedAdminName || meeting.referralAdminName || "To be assigned"}
+                          </td>
+                          <td className="px-4 py-4 align-top text-slate-600 dark:text-slate-300">{meeting.createdAt ? new Date(meeting.createdAt).toLocaleDateString() : "Pending"}</td>
+                          <td className="px-4 py-4 align-top text-slate-600 dark:text-slate-300">
+                            {meeting.scheduleDate || (meeting.status === "rejected" ? "Closed" : "Pending")}
+                          </td>
+                          <td className="px-4 py-4 align-top">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedMeetingId(String(meeting._id))}
+                              className="px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-[0.76rem] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                            >
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="lg:hidden p-4 space-y-3">
+                {citizenMeetings.map((meeting) => (
+                  <div key={meeting._id} className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">{meeting.requestId}</div>
+                        <div className="font-semibold text-slate-900 dark:text-slate-100 mt-1">{meeting.purpose}</div>
+                      </div>
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[0.72rem] font-semibold ${statusBadgeClass(meeting.status)}`}>
+                        {meeting.statusLabel}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-xs text-slate-500 dark:text-slate-400 mt-4">
+                      <div>
+                        <div className="uppercase tracking-[0.12em] text-[0.62rem]">Admin Desk</div>
+                        <div className="mt-1 text-slate-700 dark:text-slate-200">{meeting.referralAdminName || meeting.assignedAdminName || "General Admin Pool"}</div>
+                      </div>
+                      <div>
+                        <div className="uppercase tracking-[0.12em] text-[0.62rem]">Schedule</div>
+                        <div className="mt-1 text-slate-700 dark:text-slate-200">{meeting.scheduleDate ? `${meeting.scheduleDate} ${meeting.scheduleTime || ""}` : "Pending"}</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMeetingId(String(meeting._id))}
+                      className="mt-4 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-[0.76rem] font-semibold text-slate-700 dark:text-slate-200"
+                    >
+                      View Details
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-4 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50 text-xs text-slate-500 dark:text-slate-400">
+                <div>Showing 1-{citizenMeetings.length} of {citizenMeetings.length} meeting requests</div>
+                <div className="flex items-center gap-2">
+                  <span>Rows per page</span>
+                  <span className="px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200">10</span>
+                </div>
+              </div>
+            </div>
+
+            {selectedMeeting && (
+              <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-700 shadow-sm p-5 md:p-6 space-y-5">
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                  <div>
+                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">{selectedMeeting.requestId}</div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 mt-1">{selectedMeeting.purpose}</h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                      This panel reflects the latest admin processing for your meeting request.
+                    </p>
+                  </div>
+                  <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${statusBadgeClass(selectedMeeting.status)}`}>
+                    {selectedMeeting.statusLabel}
+                  </span>
+                </div>
+
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50 p-4">
+                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">Admin Desk</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {selectedMeeting.assignedAdminName || selectedMeeting.referralAdminName || "General Admin Pool"}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Referral: {selectedMeeting.referralAdminName || "Not specified"}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50 p-4">
+                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">Meeting Schedule</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {selectedMeeting.scheduleDate ? `${selectedMeeting.scheduleDate} ${selectedMeeting.scheduleTime || ""}` : "Pending admin scheduling"}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      {selectedMeeting.scheduleLocation || "Location not set yet"}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50 p-4">
+                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">Meeting Access</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      Visitor ID: {selectedMeeting.visitorId || "Pending"}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Docket: {selectedMeeting.meetingDocket || "Pending"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">Admin Notes</div>
+                    <div className="mt-2 text-sm text-slate-700 dark:text-slate-200">
+                      {selectedMeeting.adminNotes || "No admin notes added yet."}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">Verification Update</div>
+                    <div className="mt-2 text-sm text-slate-700 dark:text-slate-200">
+                      {selectedMeeting.verificationOutcome || (selectedMeeting.status === "verification_needed" ? "Verification call pending." : "No verification note yet.")}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedMeeting.rejectReason && (
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-rose-500">Rejection Note</div>
+                    <div className="mt-2 text-sm text-rose-700">{selectedMeeting.rejectReason}</div>
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+                  <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">Files Shared With Request</div>
+                  <div className="mt-3">
+                    {selectedMeeting.attachments?.length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {selectedMeeting.attachments.map((file, index) => (
+                          <a
+                            key={`${file.name || "file"}-${index}`}
+                            href={file.data || "#"}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          >
+                            {file.name || `Attachment ${index + 1}`}
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">No documents were attached with this meeting request.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  if (user?.role === "admin") {
     return (
       <div className="p-6 max-w-[1200px] mx-auto">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-2 mb-5">

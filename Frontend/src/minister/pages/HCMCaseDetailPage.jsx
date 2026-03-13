@@ -200,9 +200,15 @@ export default function HCMCaseDetailPage() {
           {focusedView && showMeetingWorkflow && (
           <Section title="Meeting Workflow">
             <div className="space-y-3">
-              <textarea value={meetingReviewNotes} onChange={(event) => setMeetingReviewNotes(event.target.value)} rows={3} placeholder="Admin notes" className={inputClass} />
+              {focusedAction === "approve" && (
+                <div className="grid md:grid-cols-2 gap-3">
+                  <input value={schedule.scheduleDate} onChange={(event) => setSchedule((current) => ({ ...current, scheduleDate: event.target.value }))} type="date" className={inputClass} />
+                  <input value={schedule.scheduleTime} onChange={(event) => setSchedule((current) => ({ ...current, scheduleTime: event.target.value }))} type="time" className={inputClass} />
+                </div>
+              )}
+              <textarea value={meetingReviewNotes} onChange={(event) => { setMeetingReviewNotes(event.target.value); setSchedule((current) => ({ ...current, adminNotes: event.target.value })); }} rows={3} placeholder="Admin notes" className={inputClass} />
               <div className="flex gap-2 flex-wrap">
-                {(!focusedView || focusedAction === "approve") && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.approveMeetingRequest(id, meetingReviewNotes))} className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-sm">Approve</button>}
+                {(!focusedView || focusedAction === "approve") && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.approveMeetingRequest(id, { scheduleDate: schedule.scheduleDate, scheduleTime: schedule.scheduleTime, adminNotes: meetingReviewNotes }))} className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-sm">Approve</button>}
                 {(!focusedView || focusedAction === "verification") && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.markMeetingVerificationNeeded(id, meetingReviewNotes))} className="px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold text-sm">Verification Needed</button>}
               </div>
             </div>
@@ -237,7 +243,7 @@ export default function HCMCaseDetailPage() {
 
           {focusedView && canReviewMeeting && focusedAction === "reject" && (
           <Section title="Reject Request">
-            <textarea value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} rows={3} placeholder="Reject reason is mandatory" className={inputClass} />
+            <textarea value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} rows={3} placeholder="Optional reject reason" className={inputClass} />
             <div className="mt-3">
               <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.rejectMeetingRequest(id, rejectReason))} className="px-4 py-2 rounded-lg bg-rose-600 text-white font-semibold text-sm">Reject</button>
             </div>
