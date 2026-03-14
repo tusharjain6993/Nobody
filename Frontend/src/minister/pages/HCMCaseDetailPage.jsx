@@ -6,14 +6,17 @@ import { useHCMAuth } from "../HCMAuthContext";
 
 function Section({ title, children }) {
   return (
-    <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100/60 dark:border-slate-700/60 shadow-3d p-4">
-      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">{title}</h3>
+    <section className="portal-card">
+      <h3 className="text-sm font-bold mb-3" style={{ color: "var(--text-primary)" }}>{title}</h3>
       {children}
     </section>
   );
 }
 
-const inputClass = "w-full p-2.5 border border-slate-200 dark:border-slate-600 rounded-xl text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100";
+const inputClass = "portal-input";
+const textAreaClass = "portal-textarea";
+const actionButtonClass = "portal-btn-secondary";
+const primaryButtonClass = "portal-btn";
 
 function getComplaintActions(item, canShowComplaintActions) {
   if (!item.assignedAdminUserId) return [{ value: "assign", label: "Assign to Me" }];
@@ -114,7 +117,7 @@ export default function HCMCaseDetailPage() {
   };
 
   if (!item) {
-    return <div className="p-6">{error || "Loading..."}</div>;
+    return <div className="portal-card">{error || "Loading..."}</div>;
   }
 
   const complaintAssignedToCurrentAdmin = itemType === "complaint" && Number(item.assignedAdminUserId || 0) === Number(user?.id || 0);
@@ -140,57 +143,65 @@ export default function HCMCaseDetailPage() {
     : getComplaintActions(item, canShowComplaintActions);
 
   return (
-    <div className="p-6 max-w-[1200px] mx-auto space-y-4">
-      <button type="button" onClick={() => navigate(-1)} className="text-xs font-semibold text-slate-500 hover:text-slate-700 bg-transparent border-0 p-0">
-        ← Back
-      </button>
-      {focusedView && (
-        <button type="button" onClick={() => navigate(`/cases/${itemType}/${id}`)} className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-transparent border-0 p-0 ml-4">
-          View Full Case
-        </button>
-      )}
-      {error && <div className="px-3 py-2 rounded-lg text-xs bg-red-50 text-red-600 border border-red-100">{error}</div>}
+    <div className="portal-page">
+      <div className="portal-toolbar">
+        <div>
+          <button type="button" onClick={() => navigate(-1)} className="portal-link-btn">← Back</button>
+          {focusedView && (
+            <button type="button" onClick={() => navigate(`/cases/${itemType}/${id}`)} className="portal-link-btn ml-4">
+              View Full Case
+            </button>
+          )}
+        </div>
+      </div>
+      {error && <div className="portal-alert portal-alert--error">{error}</div>}
 
       <Section title={itemType === "meeting" ? item.requestId : item.complaintId}>
+        <div className="portal-page__eyebrow" style={{ marginBottom: "0.9rem" }}>{itemType === "meeting" ? "Meeting Workflow" : "Complaint Workflow"}</div>
         <div className="grid md:grid-cols-2 gap-4 text-sm">
           <div>
-            <div className="text-slate-500">Citizen</div>
-            <div className="font-semibold text-slate-900">{item.citizenSnapshot?.name}</div>
+            <div style={{ color: "var(--text-tertiary)" }}>Citizen</div>
+            <div className="font-semibold" style={{ color: "var(--text-primary)" }}>{item.citizenSnapshot?.name}</div>
           </div>
           <div>
-            <div className="text-slate-500">Status</div>
-            <div className="font-semibold text-slate-900">{item.statusLabel}</div>
+            <div style={{ color: "var(--text-tertiary)" }}>Status</div>
+            <div className="font-semibold" style={{ color: "var(--text-primary)" }}>{item.statusLabel}</div>
           </div>
           <div>
-            <div className="text-slate-500">{itemType === "meeting" ? "Purpose" : "Complaint"}</div>
-            <div className="font-semibold text-slate-900">{itemType === "meeting" ? item.purpose : item.title}</div>
+            <div style={{ color: "var(--text-tertiary)" }}>{itemType === "meeting" ? "Purpose" : "Complaint"}</div>
+            <div className="font-semibold" style={{ color: "var(--text-primary)" }}>{itemType === "meeting" ? item.purpose : item.title}</div>
           </div>
           <div>
-            <div className="text-slate-500">Created</div>
-            <div className="font-semibold text-slate-900">{new Date(item.createdAt).toLocaleString()}</div>
+            <div style={{ color: "var(--text-tertiary)" }}>Created</div>
+            <div className="font-semibold" style={{ color: "var(--text-primary)" }}>{new Date(item.createdAt).toLocaleString()}</div>
           </div>
         </div>
         <div className="mt-4 flex gap-2 flex-wrap">
           {availableActions.length > 0 && (
-            <select
-              value={focusedAction}
-              onChange={async (event) => {
-                const action = event.target.value;
-                if (!action) return navigate(`/cases/${itemType}/${id}`);
-                if (itemType === "complaint" && action === "assign") {
-                  await runAction(() => workItemsApi.assignComplaintToSelf(id));
-                  navigate(`/cases/complaint/${id}`);
-                  return;
-                }
-                navigate(`/cases/${itemType}/${id}?action=${action}`);
-              }}
-              className="px-3 py-2 rounded-lg border border-indigo-200 text-indigo-700 bg-white text-sm font-medium"
-            >
-              <option value="">Actions</option>
+            <>
               {availableActions.map((action) => (
-                <option key={action.value} value={action.value}>{action.label}</option>
+                <button
+                  key={action.value}
+                  type="button"
+                  onClick={async () => {
+                    if (itemType === "complaint" && action.value === "assign") {
+                      await runAction(() => workItemsApi.assignComplaintToSelf(id));
+                      navigate(`/cases/complaint/${id}`);
+                      return;
+                    }
+                    navigate(`/cases/${itemType}/${id}?action=${action.value}`);
+                  }}
+                  className={focusedAction === action.value ? primaryButtonClass : actionButtonClass}
+                >
+                  {action.label}
+                </button>
               ))}
-            </select>
+              {focusedView && (
+                <button type="button" onClick={() => navigate(`/cases/${itemType}/${id}`)} className={actionButtonClass}>
+                  Clear Action
+                </button>
+              )}
+            </>
           )}
         </div>
       </Section>
@@ -206,10 +217,10 @@ export default function HCMCaseDetailPage() {
                   <input value={schedule.scheduleTime} onChange={(event) => setSchedule((current) => ({ ...current, scheduleTime: event.target.value }))} type="time" className={inputClass} />
                 </div>
               )}
-              <textarea value={meetingReviewNotes} onChange={(event) => { setMeetingReviewNotes(event.target.value); setSchedule((current) => ({ ...current, adminNotes: event.target.value })); }} rows={3} placeholder="Admin notes" className={inputClass} />
+              <textarea value={meetingReviewNotes} onChange={(event) => { setMeetingReviewNotes(event.target.value); setSchedule((current) => ({ ...current, adminNotes: event.target.value })); }} rows={3} placeholder="Admin notes" className={textAreaClass} />
               <div className="flex gap-2 flex-wrap">
-                {(!focusedView || focusedAction === "approve") && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.approveMeetingRequest(id, { scheduleDate: schedule.scheduleDate, scheduleTime: schedule.scheduleTime, adminNotes: meetingReviewNotes }))} className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-sm">Approve</button>}
-                {(!focusedView || focusedAction === "verification") && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.markMeetingVerificationNeeded(id, meetingReviewNotes))} className="px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold text-sm">Verification Needed</button>}
+                {(!focusedView || focusedAction === "approve") && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.approveMeetingRequest(id, { scheduleDate: schedule.scheduleDate, scheduleTime: schedule.scheduleTime, adminNotes: meetingReviewNotes }))} className={primaryButtonClass}>Approve</button>}
+                {(!focusedView || focusedAction === "verification") && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.markMeetingVerificationNeeded(id, meetingReviewNotes))} className={actionButtonClass}>Verification Needed</button>}
               </div>
             </div>
           </Section>
@@ -217,9 +228,9 @@ export default function HCMCaseDetailPage() {
 
           {focusedView && showMeetingVerificationLog && (
           <Section title="Verification Call">
-            <textarea value={verificationOutcome} onChange={(event) => setVerificationOutcome(event.target.value)} rows={3} placeholder="Log verification call outcome" className={inputClass} />
+            <textarea value={verificationOutcome} onChange={(event) => setVerificationOutcome(event.target.value)} rows={3} placeholder="Log verification call outcome" className={textAreaClass} />
             <div className="mt-3">
-              <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.logMeetingVerificationOutcome(id, verificationOutcome))} className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold text-sm">Log Outcome and Return to Review</button>
+              <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.logMeetingVerificationOutcome(id, verificationOutcome))} className={primaryButtonClass}>Log Outcome and Return to Review</button>
             </div>
           </Section>
           )}
@@ -231,21 +242,21 @@ export default function HCMCaseDetailPage() {
               <input value={schedule.scheduleTime} onChange={(event) => setSchedule((current) => ({ ...current, scheduleTime: event.target.value }))} type="time" className={inputClass} />
               <input value={schedule.scheduleLocation} onChange={(event) => setSchedule((current) => ({ ...current, scheduleLocation: event.target.value }))} placeholder="Meeting location" className={inputClass} />
             </div>
-            <textarea value={schedule.adminNotes} onChange={(event) => setSchedule((current) => ({ ...current, adminNotes: event.target.value }))} rows={3} placeholder="Additional schedule notes" className={`${inputClass} mt-3`} />
+            <textarea value={schedule.adminNotes} onChange={(event) => setSchedule((current) => ({ ...current, adminNotes: event.target.value }))} rows={3} placeholder="Additional schedule notes" className={`${textAreaClass} mt-3`} />
             <div className="mt-3 flex gap-2 flex-wrap">
-              <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.scheduleMeetingRequest(id, schedule))} className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold text-sm">
+              <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.scheduleMeetingRequest(id, schedule))} className={primaryButtonClass}>
                 {item.status === "scheduled" ? "Update Schedule" : "Schedule Meeting"}
               </button>
             </div>
-            {item.visitorId && <p className="mt-3 text-sm text-slate-600">Visitor ID: {item.visitorId} · Meeting Docket: {item.meetingDocket}</p>}
+            {item.visitorId && <p className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>Visitor ID: {item.visitorId} · Meeting Docket: {item.meetingDocket}</p>}
           </Section>
           )}
 
           {focusedView && canReviewMeeting && focusedAction === "reject" && (
           <Section title="Reject Request">
-            <textarea value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} rows={3} placeholder="Optional reject reason" className={inputClass} />
+            <textarea value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} rows={3} placeholder="Optional reject reason" className={textAreaClass} />
             <div className="mt-3">
-              <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.rejectMeetingRequest(id, rejectReason))} className="px-4 py-2 rounded-lg bg-rose-600 text-white font-semibold text-sm">Reject</button>
+              <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.rejectMeetingRequest(id, rejectReason))} className="portal-btn-danger">Reject</button>
             </div>
           </Section>
           )}
@@ -254,12 +265,12 @@ export default function HCMCaseDetailPage() {
         <>
           {focusedView && showComplaintAssignment && (
             <Section title="Assignment Required">
-              <p className="text-sm text-slate-600 mb-3">This complaint is still in the common pool. Until you assign it to yourself, only citizen data and the complaint text are visible.</p>
+              <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>This complaint is still in the common pool. Until you assign it to yourself, only citizen data and the complaint text are visible.</p>
               <button
                 type="button"
                 disabled={actionLoading}
                 onClick={() => runAction(() => workItemsApi.assignComplaintToSelf(id))}
-                className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold text-sm"
+                className={primaryButtonClass}
               >
                 Assign to Me
               </button>
@@ -268,23 +279,23 @@ export default function HCMCaseDetailPage() {
 
           {focusedView && showComplaintReadOnly && (
             <Section title="Read Only">
-              <p className="text-sm text-slate-600">This complaint is assigned to {item.assignedAdminName}. Workflow controls are only available to the assigned admin.</p>
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>This complaint is assigned to {item.assignedAdminName}. Workflow controls are only available to the assigned admin.</p>
             </Section>
           )}
 
           {focusedView && showComplaintResolved && (
             <Section title={item.status === "completed" ? "Completed Case" : "Resolved Case"}>
-              <div className="space-y-3 text-sm text-slate-600">
+              <div className="space-y-3 text-sm" style={{ color: "var(--text-secondary)" }}>
                 <p>This complaint is now read-only. The citizen has already received the resolved case update.</p>
-                {item.resolutionSummary && <div><span className="font-semibold text-slate-900">Resolution summary:</span> {item.resolutionSummary}</div>}
-                {item.resolutionDocs?.length > 0 && <div><span className="font-semibold text-slate-900">Resolution files:</span> {item.resolutionDocs.map((doc) => doc.name).join(", ")}</div>}
+                {item.resolutionSummary && <div><span className="font-semibold" style={{ color: "var(--text-primary)" }}>Resolution summary:</span> {item.resolutionSummary}</div>}
+                {item.resolutionDocs?.length > 0 && <div><span className="font-semibold" style={{ color: "var(--text-primary)" }}>Resolution files:</span> {item.resolutionDocs.map((doc) => doc.name).join(", ")}</div>}
                 {item.status === "resolved" && (
                   <div className="pt-2">
                     <button
                       type="button"
                       disabled={actionLoading}
                       onClick={() => runAction(() => workItemsApi.closeComplaintCase(id))}
-                      className="px-4 py-2 rounded-lg bg-slate-900 text-white font-semibold text-sm"
+                      className={primaryButtonClass}
                     >
                       Close This Case
                     </button>
@@ -316,7 +327,7 @@ export default function HCMCaseDetailPage() {
               <input value={complaintForm.manualContact} onChange={(event) => setComplaintForm((current) => ({ ...current, manualContact: event.target.value }))} placeholder="Manual contact entry" className={inputClass} />
             </div>
             <div className="mt-3">
-              <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.updateComplaintDepartment(id, complaintForm))} className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold text-sm">Save Department Flow</button>
+              <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.updateComplaintDepartment(id, complaintForm))} className={primaryButtonClass}>Save Department Flow</button>
             </div>
           </Section>
           )}
@@ -325,16 +336,16 @@ export default function HCMCaseDetailPage() {
           <Section title="Call Scheduling and Outcome">
             <input value={complaintForm.callScheduledAt} onChange={(event) => setComplaintForm((current) => ({ ...current, callScheduledAt: event.target.value }))} type="datetime-local" className={inputClass} />
             <div className="mt-3 flex gap-2 flex-wrap">
-              <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.scheduleComplaintCall(id, complaintForm.callScheduledAt))} className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold text-sm">Schedule Call</button>
+              <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.scheduleComplaintCall(id, complaintForm.callScheduledAt))} className={primaryButtonClass}>Schedule Call</button>
             </div>
           </Section>
           )}
 
           {focusedView && showLogCall && (
           <Section title="Log Call Outcome">
-            <textarea value={complaintForm.callOutcome} onChange={(event) => setComplaintForm((current) => ({ ...current, callOutcome: event.target.value }))} rows={3} placeholder="Log call outcome" className={inputClass} />
+            <textarea value={complaintForm.callOutcome} onChange={(event) => setComplaintForm((current) => ({ ...current, callOutcome: event.target.value }))} rows={3} placeholder="Log call outcome" className={textAreaClass} />
             <div className="mt-3">
-              <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.logComplaintCallOutcome(id, complaintForm.callOutcome))} className="px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold text-sm">Log Call Outcome</button>
+              <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.logComplaintCallOutcome(id, complaintForm.callOutcome))} className={primaryButtonClass}>Log Call Outcome</button>
             </div>
           </Section>
           )}
@@ -343,14 +354,14 @@ export default function HCMCaseDetailPage() {
           <Section title="Resolve or Escalate">
             {(!focusedView || focusedAction === "resolve") && (
               <>
-                <textarea value={complaintForm.resolutionSummary} onChange={(event) => setComplaintForm((current) => ({ ...current, resolutionSummary: event.target.value }))} rows={3} placeholder="Resolution reason / summary" className={`${inputClass} mb-3`} />
+                <textarea value={complaintForm.resolutionSummary} onChange={(event) => setComplaintForm((current) => ({ ...current, resolutionSummary: event.target.value }))} rows={3} placeholder="Resolution reason / summary" className={`${textAreaClass} mb-3`} />
                 <input type="file" multiple onChange={(event) => setResolutionFiles(Array.from(event.target.files || []))} className={inputClass} />
                 <div className="mt-3 flex gap-2 flex-wrap">
                   <button
                     type="button"
                     disabled={actionLoading}
                     onClick={() => runAction(async () => workItemsApi.resolveComplaint(id, { resolutionSummary: complaintForm.resolutionSummary, resolutionDocs: await filesToDocuments(resolutionFiles) }))}
-                    className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-sm"
+                    className={primaryButtonClass}
                   >
                     Resolve Complaint
                   </button>
@@ -359,9 +370,9 @@ export default function HCMCaseDetailPage() {
             )}
             {(!focusedView || focusedAction === "escalate") && (
               <>
-                <textarea value={complaintForm.escalationPurpose} onChange={(event) => setComplaintForm((current) => ({ ...current, escalationPurpose: event.target.value }))} rows={3} placeholder="Purpose for admin meeting escalation" className={`${inputClass} mt-3`} />
+                <textarea value={complaintForm.escalationPurpose} onChange={(event) => setComplaintForm((current) => ({ ...current, escalationPurpose: event.target.value }))} rows={3} placeholder="Purpose for admin meeting escalation" className={`${textAreaClass} mt-3`} />
                 <div className="mt-3">
-                  <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.escalateComplaintToMeeting(id, { purpose: complaintForm.escalationPurpose }))} className="px-4 py-2 rounded-lg bg-violet-600 text-white font-semibold text-sm">Needs Admin Meeting Escalation</button>
+                  <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.escalateComplaintToMeeting(id, { purpose: complaintForm.escalationPurpose }))} className={primaryButtonClass}>Needs Admin Meeting Escalation</button>
                 </div>
               </>
             )}
@@ -373,10 +384,10 @@ export default function HCMCaseDetailPage() {
       {!focusedView && <Section title="Activity Log">
         <div className="space-y-2">
           {(item.logs || []).map((log) => (
-            <div key={log._id} className="border-b border-slate-100 pb-2">
-              <div className="text-sm font-semibold text-slate-900">{log.action}</div>
-              {log.notes && <div className="text-sm text-slate-600">{log.notes}</div>}
-              <div className="text-xs text-slate-400">{log.createdByName} · {new Date(log.createdAt).toLocaleString()}</div>
+            <div key={log._id} className="pb-2" style={{ borderBottom: "1px solid var(--border-secondary)" }}>
+              <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{log.action}</div>
+              {log.notes && <div className="text-sm" style={{ color: "var(--text-secondary)" }}>{log.notes}</div>}
+              <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>{log.createdByName} · {new Date(log.createdAt).toLocaleString()}</div>
             </div>
           ))}
         </div>

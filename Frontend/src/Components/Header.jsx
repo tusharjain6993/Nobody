@@ -5,14 +5,20 @@ import {
   AlertRegular,
   SettingsRegular,
   SignOutRegular,
+  WeatherMoonRegular,
+  WeatherSunnyRegular,
+  SearchRegular,
+  NavigationRegular,
 } from "@fluentui/react-icons";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useHCMAuth } from "../minister/HCMAuthContext";
 import { notificationsApi } from "../minister/ministerApi";
 import { getRoleLabel } from "../constants/adminWorkflow";
+import { useTheme } from "../context/ThemeContext";
 
-const Header = () => {
+const Header = ({ onOpenMobileNav }) => {
   const { user, logout } = useHCMAuth();
+  const { darkMode, toggleDarkMode } = useTheme();
   const ref = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -101,62 +107,77 @@ const Header = () => {
   };
 
   return (
-    <header className="h-12 bg-white dark:bg-slate-800 shadow-3d-sm dark:shadow-3d-sm flex items-center justify-between px-6 relative z-10">
-      <div>
-        <div className="text-gray-900 dark:text-slate-100 text-lg font-medium">{pageTitle}</div>
+    <header className="portal-topbar glass-panel">
+      <div className="portal-topbar__left">
+        <button type="button" className="portal-topbar__mobile-toggle" onClick={onOpenMobileNav}>
+          <NavigationRegular />
+        </button>
+        <div>
+          <div className="portal-topbar__eyebrow">Nobody-1 Portal</div>
+          <div className="portal-topbar__title">{pageTitle}</div>
+        </div>
       </div>
 
-      <div className="flex items-center gap-4 relative" ref={ref}>
+      <div className="portal-topbar__right" ref={ref}>
+        <div className="portal-topbar__search">
+          <SearchRegular className="portal-topbar__search-icon" />
+          <input type="text" placeholder="Search pages, cases, meetings..." />
+        </div>
+
         <HeaderIcon icon={isFullscreen ? ArrowMinimizeRegular : ArrowMaximizeRegular} onClick={toggleFullscreen} />
+        <HeaderIcon icon={darkMode ? WeatherSunnyRegular : WeatherMoonRegular} onClick={toggleDarkMode} />
 
         <button className="relative cursor-pointer" onClick={() => { setNotifyOpen((value) => !value); setOpen(false); }}>
-          <AlertRegular style={{ fontSize: 16 }} className="text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200" />
+          <span className="portal-topbar__icon-btn">
+            <AlertRegular />
+          </span>
           {unreadCount > 0 && (
-            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-bold px-1.5 rounded-full min-w-[16px] text-center">
+            <span className="portal-topbar__badge">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}
         </button>
 
-        <button onClick={() => { setOpen((value) => !value); setNotifyOpen(false); }}>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold cursor-pointer shadow-3d ring-2 ring-white/30 dark:ring-slate-600/50">
+        <button type="button" className="portal-topbar__user" onClick={() => { setOpen((value) => !value); setNotifyOpen(false); }}>
+          <div className="portal-topbar__avatar">
             {user?.name?.[0]?.toUpperCase() || "U"}
           </div>
+          <span className="portal-topbar__user-name">{user?.name?.split(" ")[0] || "User"}</span>
         </button>
 
         {open && (
-          <div className="absolute right-0 top-11 w-60 bg-white dark:bg-slate-800 rounded-xl shadow-3d-lg border border-gray-200/60 dark:border-slate-600/60 z-50 overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-300 dark:border-slate-600">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold flex-shrink-0">
+          <div className="portal-menu">
+            <div className="portal-menu__header">
+              <div className="portal-topbar__avatar">
                 {user?.name?.[0]?.toUpperCase() || "U"}
               </div>
               <div>
-                <p className="font-bold text-gray-800 dark:text-slate-200 text-sm break-all line-clamp-1">{user?.name || "User"}</p>
-                <p className="text-gray-500 dark:text-slate-400 text-xs break-all line-clamp-1 capitalize">
+                <p className="font-bold text-sm" style={{ margin: 0, color: "var(--text-primary)" }}>{user?.name || "User"}</p>
+                <p className="text-xs capitalize" style={{ margin: 0, color: "var(--text-tertiary)" }}>
                   {getRoleLabel(user?.role) || "Citizen"} {user?.email ? `· ${user.email}` : ""}
                 </p>
               </div>
             </div>
-            <ul className="py-2 text-sm">
+            <div className="py-1">
               <MenuItem icon={SettingsRegular} label="Settings" onClick={() => { navigate("/settings"); setOpen(false); }} />
               <MenuItem icon={SignOutRegular} label="Logout" danger onClick={handleLogout} />
-            </ul>
+            </div>
           </div>
         )}
 
         {notifyOpen && (
-          <div className="absolute right-0 top-11 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-3d-lg border border-gray-200/60 dark:border-slate-600/60 z-50 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 dark:border-slate-600">
-              <span className="font-bold text-sm text-gray-800 dark:text-slate-200">Notifications</span>
+          <div className="portal-menu portal-menu--wide">
+            <div className="portal-menu__header">
+              <span className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>Notifications</span>
               {unreadCount > 0 && (
-                <button onClick={handleMarkAllRead} className="text-xs text-indigo-500 dark:text-indigo-400 font-semibold cursor-pointer bg-transparent border-none">
+                <button onClick={handleMarkAllRead} className="portal-link-btn text-xs">
                   Mark all read
                 </button>
               )}
             </div>
             <div className="max-h-72 overflow-y-auto">
               {notifications.length === 0 ? (
-                <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">No notifications</p>
+                <p className="text-sm text-center py-6" style={{ color: "var(--text-tertiary)" }}>No notifications</p>
               ) : (
                 notifications.slice(0, 20).map((item) => (
                   <div
@@ -166,10 +187,14 @@ const Header = () => {
                       if (item.link) navigate(item.link);
                       setNotifyOpen(false);
                     }}
-                    className={`px-4 py-3 cursor-pointer border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors ${!item.isRead ? "bg-indigo-50/50 dark:bg-indigo-900/10" : ""}`}
+                    className="px-4 py-3 cursor-pointer transition-colors"
+                    style={{
+                      borderBottom: "1px solid var(--border-primary)",
+                      background: !item.isRead ? "var(--accent-primary-subtle)" : "transparent",
+                    }}
                   >
-                    <p className={`text-xs ${!item.isRead ? "font-bold text-gray-800 dark:text-slate-200" : "text-gray-600 dark:text-slate-400"}`}>{item.message}</p>
-                    <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">{new Date(item.createdAt).toLocaleString()}</p>
+                    <p className="text-xs" style={{ margin: 0, fontWeight: !item.isRead ? 700 : 500, color: !item.isRead ? "var(--text-primary)" : "var(--text-secondary)" }}>{item.message}</p>
+                    <p className="text-[10px] mt-0.5" style={{ marginBottom: 0, color: "var(--text-tertiary)" }}>{new Date(item.createdAt).toLocaleString()}</p>
                   </div>
                 ))
               )}
@@ -182,19 +207,16 @@ const Header = () => {
 };
 
 const HeaderIcon = ({ icon: Icon, onClick }) => (
-  <button className="relative text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 cursor-pointer" onClick={onClick}>
-    <Icon style={{ fontSize: 16 }} />
+  <button type="button" className="portal-topbar__icon-btn" onClick={onClick}>
+    <Icon />
   </button>
 );
 
 const MenuItem = ({ icon: Icon, label, danger, onClick }) => (
-  <li
-    className={`flex items-center gap-3 px-4 py-2 cursor-pointer ${danger ? "text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30" : "text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700"}`}
-    onClick={onClick}
-  >
-    <Icon style={{ fontSize: 16 }} />
-    {label}
-  </li>
+  <button type="button" className={`portal-menu__item ${danger ? "portal-menu__item--danger" : ""}`} onClick={onClick}>
+    <Icon />
+    <span>{label}</span>
+  </button>
 );
 
 export default Header;

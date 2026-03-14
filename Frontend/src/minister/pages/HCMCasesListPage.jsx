@@ -46,11 +46,12 @@ export default function HCMCasesListPage() {
   const rejectedMeetingCount = data.meetingRequests.filter((item) => item.status === "rejected").length;
   const completedCaseCount = data.complaints.filter((item) => item.status === "completed").length;
   return (
-    <div className="p-6 max-w-[1240px] mx-auto">
-      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-5">
+    <div className="portal-page">
+      <div className="portal-toolbar">
         <div>
-          <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-1">Admin Work Queue</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl">
+          <div className="portal-page__eyebrow">Admin Console</div>
+          <h1 className="text-3xl font-bold mb-1" style={{ color: "var(--text-primary)" }}>Admin Work Queue</h1>
+          <p className="text-sm max-w-2xl" style={{ color: "var(--text-secondary)" }}>
             Complaint queue and meeting request queue are managed here. Scheduled meetings move to the Meetings page.
           </p>
         </div>
@@ -58,11 +59,11 @@ export default function HCMCasesListPage() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search requests, citizens, statuses..."
-          className="text-sm px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none"
+          className="portal-input max-w-sm"
         />
       </div>
 
-      <div className="flex gap-2 mb-4">
+      <div className="portal-tabs">
         {[
           ["complaints", `Complaint Queue (${complaintQueueCount})`],
           ["meetings", `Meeting Request Queue (${meetingQueueCount})`],
@@ -74,33 +75,33 @@ export default function HCMCasesListPage() {
             key={id}
             type="button"
             onClick={() => setTab(id)}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold border ${tab === id ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-700 border-slate-200"}`}
+            className={`portal-tab ${tab === id ? "portal-tab--active" : ""}`}
           >
             {label}
           </button>
         ))}
       </div>
 
-      {error && <div className="mb-3 px-3 py-2 rounded-lg text-xs bg-red-50 text-red-600 border border-red-100">{error}</div>}
+      {error && <div className="portal-alert portal-alert--error">{error}</div>}
       {loading ? (
-        <div className="text-sm text-slate-500 py-8 text-center">Loading work queue…</div>
+        <div className="portal-card portal-empty">Loading work queue…</div>
       ) : rows.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-3d p-8 text-center">
-          <p className="text-slate-400 text-sm">No items found for the current view.</p>
+        <div className="portal-card portal-empty">
+          <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>No items found for the current view.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="portal-list">
           {rows.map((item) => (
-            <div key={`${tab}-${item._id}`} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100/60 dark:border-slate-700/60 shadow-3d p-4">
-              <div className="flex items-start justify-between gap-3 mb-2">
+            <div key={`${tab}-${item._id}`} className="portal-list-item">
+              <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">{item.title || item.purpose}</h3>
-                    <span className="text-[0.68rem] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 font-semibold">
+                    <h3 className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>{item.title || item.purpose}</h3>
+                    <span className="portal-chip" style={{ background: "var(--accent-primary-subtle)", color: "var(--accent-primary)" }}>
                       {item.complaintId || item.requestId}
                     </span>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap">
+                  <div className="portal-meta">
                     <span>{item.citizenSnapshot?.name}</span>
                     {item.complaintId ? (
                       <span>{item.assignedAdminName ? `Assigned to ${item.assignedAdminName}` : "Unassigned pool item"}</span>
@@ -110,7 +111,7 @@ export default function HCMCasesListPage() {
                     <span>Created {new Date(item.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>
-                <span className="inline-block px-2 py-0.5 rounded-full text-[0.7rem] font-bold bg-slate-100 text-slate-700">
+                <span className="portal-chip">
                   {item.statusLabel}
                 </span>
               </div>
@@ -119,7 +120,7 @@ export default function HCMCasesListPage() {
                 <button
                   type="button"
                   onClick={() => navigate(`/cases/${item.complaintId ? "complaint" : "meeting"}/${item._id}`)}
-                  className="px-3 py-1.5 text-[0.78rem] rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 font-medium"
+                  className="portal-btn-secondary"
                 >
                   Open
                 </button>
@@ -133,7 +134,7 @@ export default function HCMCasesListPage() {
                         complaints: current.complaints.map((row) => (row._id === item._id ? res.complaint : row)),
                       }));
                     }}
-                    className="px-3 py-1.5 text-[0.78rem] rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-medium"
+                    className="portal-btn"
                   >
                     Assign to Me
                   </button>

@@ -8,6 +8,10 @@ const TYPE_STYLES = {
   "Scheduled Meeting": "bg-emerald-100 text-emerald-700 border-emerald-200",
   "Minister Meeting": "bg-amber-100 text-amber-700 border-amber-200",
 };
+const panelClass = "portal-card";
+const secondaryBtnClass = "portal-btn-secondary";
+const primaryBtnClass = "portal-btn";
+const inputClass = "portal-input";
 
 function startOfDay(date) {
   const d = new Date(date);
@@ -58,29 +62,29 @@ function Modal({ item, mode, editForm, setEditForm, onClose, onSave, onModeChang
   if (!item) return null;
   return (
     <div className="fixed inset-0 bg-slate-950/45 backdrop-blur-[1px] z-50 flex items-start justify-center p-6 overflow-auto">
-      <div className="w-full max-w-xl mt-10 bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-4">
+      <div className="w-full max-w-xl mt-10 portal-card overflow-hidden p-0">
+        <div className="px-5 py-4 flex items-start justify-between gap-4" style={{ borderBottom: "1px solid var(--border-secondary)" }}>
           <div>
             <div className={`inline-flex px-2 py-1 rounded-full text-[11px] font-semibold border ${TYPE_STYLES[item.type] || "bg-slate-100 text-slate-700 border-slate-200"}`}>{item.type}</div>
-            <h3 className="mt-3 text-xl font-bold text-slate-900">{item.title}</h3>
-            <div className="text-sm text-slate-500 mt-1">{new Date(item.startsAt).toLocaleString()}</div>
+            <h3 className="mt-3 text-xl font-bold" style={{ color: "var(--text-primary)" }}>{item.title}</h3>
+            <div className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{new Date(item.startsAt).toLocaleString()}</div>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700 text-sm font-semibold">Close</button>
+          <button type="button" onClick={onClose} className="portal-link-btn text-sm">Close</button>
         </div>
 
-        <div className="px-5 py-3 border-b border-slate-100 flex gap-2">
-          <button type="button" onClick={() => onModeChange("details")} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${mode === "details" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}>Details</button>
-          <button type="button" onClick={() => onModeChange("edit")} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${mode === "edit" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}>Edit</button>
-          <button type="button" onClick={() => onModeChange("files")} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${mode === "files" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}>Files</button>
+        <div className="px-5 py-3 flex gap-2" style={{ borderBottom: "1px solid var(--border-secondary)" }}>
+          <button type="button" onClick={() => onModeChange("details")} className={`portal-tab ${mode === "details" ? "portal-tab--active" : ""}`}>Details</button>
+          <button type="button" onClick={() => onModeChange("edit")} className={`portal-tab ${mode === "edit" ? "portal-tab--active" : ""}`}>Edit</button>
+          <button type="button" onClick={() => onModeChange("files")} className={`portal-tab ${mode === "files" ? "portal-tab--active" : ""}`}>Files</button>
         </div>
 
         <div className="p-5">
           {mode === "details" && (
             <div className="space-y-3">
-              <div className="text-sm text-slate-500">{item.source}</div>
-              <div className="text-sm text-slate-700">{item.location || "Location pending"}</div>
-              <div className="text-sm text-slate-600 leading-6">{item.details}</div>
-              {item.videoLink && <a href={item.videoLink} target="_blank" rel="noreferrer" className="text-sm text-indigo-600 inline-block">Open video repository</a>}
+              <div className="text-sm" style={{ color: "var(--text-tertiary)" }}>{item.source}</div>
+              <div className="text-sm" style={{ color: "var(--text-primary)" }}>{item.location || "Location pending"}</div>
+              <div className="text-sm leading-6" style={{ color: "var(--text-secondary)" }}>{item.details}</div>
+              {item.videoLink && <a href={item.videoLink} target="_blank" rel="noreferrer" className="portal-link-btn inline-block text-sm">Open video repository</a>}
             </div>
           )}
 
@@ -92,15 +96,16 @@ function Modal({ item, mode, editForm, setEditForm, onClose, onSave, onModeChang
                   href={file.data}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between gap-3 border border-slate-200 rounded-2xl px-4 py-3 hover:bg-slate-50"
+                  className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3"
+                  style={{ border: "1px solid var(--border-primary)", background: "var(--bg-secondary)" }}
                 >
                   <div>
-                    <div className="text-sm font-semibold text-slate-900">{file.name || `File ${index + 1}`}</div>
-                    <div className="text-xs text-slate-500">{file.type || "Attachment"}</div>
+                    <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{file.name || `File ${index + 1}`}</div>
+                    <div className="text-xs" style={{ color: "var(--text-secondary)" }}>{file.type || "Attachment"}</div>
                   </div>
-                  <span className="text-xs font-semibold text-indigo-600">Open</span>
+                  <span className="text-xs font-semibold" style={{ color: "var(--accent-primary)" }}>Open</span>
                 </a>
-              )) : <div className="text-sm text-slate-400">No files attached to this calendar item.</div>}
+              )) : <div className="text-sm" style={{ color: "var(--text-tertiary)" }}>No files attached to this calendar item.</div>}
             </div>
           )}
 
@@ -112,15 +117,15 @@ function Modal({ item, mode, editForm, setEditForm, onClose, onSave, onModeChang
               }}
               className="space-y-3"
             >
-              <input value={editForm.title} onChange={(event) => setEditForm((current) => ({ ...current, title: event.target.value }))} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm" placeholder="Title" />
-              <textarea value={editForm.details} onChange={(event) => setEditForm((current) => ({ ...current, details: event.target.value }))} rows={4} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm" placeholder="Description" />
+              <input value={editForm.title} onChange={(event) => setEditForm((current) => ({ ...current, title: event.target.value }))} className={inputClass} placeholder="Title" />
+              <textarea value={editForm.details} onChange={(event) => setEditForm((current) => ({ ...current, details: event.target.value }))} rows={4} className="portal-textarea" placeholder="Description" />
               <div className="grid grid-cols-2 gap-3">
-                <input type="datetime-local" value={editForm.startsAt} onChange={(event) => setEditForm((current) => ({ ...current, startsAt: event.target.value }))} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm" />
-                <input type="datetime-local" value={editForm.endsAt} onChange={(event) => setEditForm((current) => ({ ...current, endsAt: event.target.value }))} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm" />
+                <input type="datetime-local" value={editForm.startsAt} onChange={(event) => setEditForm((current) => ({ ...current, startsAt: event.target.value }))} className={inputClass} />
+                <input type="datetime-local" value={editForm.endsAt} onChange={(event) => setEditForm((current) => ({ ...current, endsAt: event.target.value }))} className={inputClass} />
               </div>
-              <input value={editForm.location} onChange={(event) => setEditForm((current) => ({ ...current, location: event.target.value }))} className="w-full p-2.5 border border-slate-200 rounded-xl text-sm" placeholder="Location" />
+              <input value={editForm.location} onChange={(event) => setEditForm((current) => ({ ...current, location: event.target.value }))} className={inputClass} placeholder="Location" />
               <div className="pt-2">
-                <button type="submit" disabled={saving} className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold text-sm disabled:opacity-50">
+                <button type="submit" disabled={saving} className={primaryBtnClass}>
                   {saving ? "Saving..." : "Save Changes"}
                 </button>
               </div>
@@ -232,27 +237,28 @@ export default function MinisterCalendarPage() {
   };
 
   return (
-    <div className="p-6 max-w-[1380px] mx-auto space-y-5">
+    <div className="portal-page">
       <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-1">Minister Calendar</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-3xl">
+          <div className="portal-page__eyebrow">Minister Schedule</div>
+          <h1 className="text-3xl font-bold mb-1" style={{ color: "var(--text-primary)" }}>Minister Calendar</h1>
+          <p className="text-sm max-w-3xl" style={{ color: "var(--text-secondary)" }}>
             A Google Calendar style view combining DEO-managed calendar entries and minister meetings scheduled by admins from citizen meeting requests.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => setCursorDate(startOfDay(new Date()))} className="px-3 py-1.5 rounded-full text-xs font-semibold border bg-white text-slate-700 border-slate-200">Today</button>
-          <button type="button" onClick={() => shiftCursor(-1)} className="px-3 py-1.5 rounded-full text-xs font-semibold border bg-white text-slate-700 border-slate-200">Prev</button>
-          <button type="button" onClick={() => shiftCursor(1)} className="px-3 py-1.5 rounded-full text-xs font-semibold border bg-white text-slate-700 border-slate-200">Next</button>
+          <button type="button" onClick={() => setCursorDate(startOfDay(new Date()))} className={secondaryBtnClass}>Today</button>
+          <button type="button" onClick={() => shiftCursor(-1)} className={secondaryBtnClass}>Prev</button>
+          <button type="button" onClick={() => shiftCursor(1)} className={secondaryBtnClass}>Next</button>
           {VIEW_OPTIONS.map((option) => (
-            <button key={option} type="button" onClick={() => setView(option)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${view === option ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}>
+            <button key={option} type="button" onClick={() => setView(option)} className={`portal-tab ${view === option ? "portal-tab--active" : ""}`}>
               {option[0].toUpperCase() + option.slice(1)}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="text-sm font-semibold text-slate-700">
+      <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
         {view === "month"
           ? cursorDate.toLocaleString("default", { month: "long", year: "numeric" })
           : view === "week"
@@ -260,30 +266,30 @@ export default function MinisterCalendarPage() {
             : cursorDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
       </div>
 
-      {error && <div className="px-3 py-2 rounded-lg text-xs bg-red-50 text-red-600 border border-red-100">{error}</div>}
+      {error && <div className="portal-alert portal-alert--error">{error}</div>}
 
       {loading ? (
-        <div className="text-sm text-slate-500 py-8 text-center">Loading minister calendar…</div>
+        <div className="portal-card portal-empty">Loading minister calendar…</div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-5">
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-3d overflow-hidden">
+          <div className={`${panelClass} overflow-hidden p-0`}>
             {view === "month" && (
               <div>
-                <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
-                  {DAYS.map((day) => <div key={day} className="px-3 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">{day}</div>)}
+                <div className="grid grid-cols-7" style={{ borderBottom: "1px solid var(--border-secondary)", background: "var(--bg-secondary)" }}>
+                  {DAYS.map((day) => <div key={day} className="px-3 py-3 text-xs font-bold uppercase tracking-wide" style={{ color: "var(--text-tertiary)" }}>{day}</div>)}
                 </div>
                 <div className="grid grid-cols-7">
                   {monthCells.map((cell) => {
                     const inMonth = cell.date.getMonth() === cursorDate.getMonth();
                     const isToday = isSameDay(cell.date, new Date());
                     return (
-                      <div key={cell.date.toISOString()} className={`min-h-32 border-b border-r border-slate-100 p-2 ${inMonth ? "bg-white" : "bg-slate-50/70"}`}>
-                        <button type="button" onClick={() => setCursorDate(cell.date)} className={`w-8 h-8 rounded-full text-xs font-semibold ${isToday ? "bg-blue-600 text-white" : inMonth ? "text-slate-700" : "text-slate-400"}`}>
+                      <div key={cell.date.toISOString()} className="min-h-32 p-2" style={{ borderBottom: "1px solid var(--border-secondary)", borderRight: "1px solid var(--border-secondary)", background: inMonth ? "var(--bg-primary)" : "var(--bg-secondary)" }}>
+                        <button type="button" onClick={() => setCursorDate(cell.date)} className={`w-8 h-8 rounded-full text-xs font-semibold ${isToday ? "bg-blue-600 text-white" : ""}`} style={!isToday ? { color: inMonth ? "var(--text-primary)" : "var(--text-tertiary)" } : undefined}>
                           {cell.date.getDate()}
                         </button>
                         <div className="mt-2 space-y-1">
                           {cell.items.slice(0, 3).map((item) => <EventPill key={item.id} item={item} compact onClick={() => openItem(item)} />)}
-                          {cell.items.length > 3 && <div className="text-[11px] text-slate-400 px-1">+{cell.items.length - 3} more</div>}
+                          {cell.items.length > 3 && <div className="text-[11px] px-1" style={{ color: "var(--text-tertiary)" }}>+{cell.items.length - 3} more</div>}
                         </div>
                       </div>
                     );
@@ -294,18 +300,18 @@ export default function MinisterCalendarPage() {
 
             {view === "week" && (
               <div>
-                <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
+                <div className="grid grid-cols-7" style={{ borderBottom: "1px solid var(--border-secondary)", background: "var(--bg-secondary)" }}>
                   {weekDays.map((day) => (
                     <div key={day.date.toISOString()} className="px-3 py-3 text-center">
-                      <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{DAYS[day.date.getDay()]}</div>
-                      <div className={`mt-2 inline-flex w-8 h-8 items-center justify-center rounded-full text-sm font-semibold ${isSameDay(day.date, new Date()) ? "bg-blue-600 text-white" : "text-slate-700"}`}>{day.date.getDate()}</div>
+                      <div className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--text-tertiary)" }}>{DAYS[day.date.getDay()]}</div>
+                      <div className={`mt-2 inline-flex w-8 h-8 items-center justify-center rounded-full text-sm font-semibold ${isSameDay(day.date, new Date()) ? "bg-blue-600 text-white" : ""}`} style={!isSameDay(day.date, new Date()) ? { color: "var(--text-primary)" } : undefined}>{day.date.getDate()}</div>
                     </div>
                   ))}
                 </div>
                 <div className="grid grid-cols-7 min-h-[520px]">
                   {weekDays.map((day) => (
-                    <div key={day.date.toISOString()} className="border-r border-slate-100 p-3 space-y-2">
-                      {day.items.length === 0 ? <div className="text-xs text-slate-300">No events</div> : day.items.map((item) => <EventPill key={item.id} item={item} onClick={() => openItem(item)} />)}
+                    <div key={day.date.toISOString()} className="p-3 space-y-2" style={{ borderRight: "1px solid var(--border-secondary)" }}>
+                      {day.items.length === 0 ? <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>No events</div> : day.items.map((item) => <EventPill key={item.id} item={item} onClick={() => openItem(item)} />)}
                     </div>
                   ))}
                 </div>
@@ -314,22 +320,22 @@ export default function MinisterCalendarPage() {
 
             {view === "day" && (
               <div className="p-4 min-h-[520px]">
-                <div className="text-sm font-bold text-slate-900 mb-4">{cursorDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
+                <div className="text-sm font-bold mb-4" style={{ color: "var(--text-primary)" }}>{cursorDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
                 <div className="space-y-3">
                   {dayItems.length === 0 ? (
-                    <div className="text-sm text-slate-400">No events for this day.</div>
+                    <div className="text-sm" style={{ color: "var(--text-tertiary)" }}>No events for this day.</div>
                   ) : (
                     dayItems.map((item) => (
-                      <button key={item.id} type="button" onClick={() => openItem(item)} className="w-full text-left border border-slate-100 rounded-2xl p-4 bg-slate-50/70">
+                      <button key={item.id} type="button" onClick={() => openItem(item)} className="w-full text-left rounded-2xl p-4" style={{ border: "1px solid var(--border-secondary)", background: "var(--bg-secondary)" }}>
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <div className={`inline-flex px-2 py-1 rounded-full text-[11px] font-semibold border ${TYPE_STYLES[item.type] || "bg-slate-100 text-slate-700 border-slate-200"}`}>{item.type}</div>
-                            <div className="mt-2 font-bold text-slate-900">{item.title}</div>
-                            <div className="text-xs text-slate-500 mt-1">{item.source} · {item.location || "Location pending"}</div>
+                            <div className="mt-2 font-bold" style={{ color: "var(--text-primary)" }}>{item.title}</div>
+                            <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{item.source} · {item.location || "Location pending"}</div>
                           </div>
-                          <div className="text-xs text-slate-500">{formatTime(item.startsAt)} - {formatTime(item.endsAt)}</div>
+                          <div className="text-xs" style={{ color: "var(--text-secondary)" }}>{formatTime(item.startsAt)} - {formatTime(item.endsAt)}</div>
                         </div>
-                        <div className="text-xs text-slate-400 mt-3">{item.details}</div>
+                        <div className="text-xs mt-3" style={{ color: "var(--text-tertiary)" }}>{item.details}</div>
                       </button>
                     ))
                   )}
@@ -338,13 +344,13 @@ export default function MinisterCalendarPage() {
             )}
           </div>
 
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-3d p-4">
-            <div className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-3">Upcoming Agenda</div>
+          <div className={panelClass}>
+            <div className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: "var(--text-tertiary)" }}>Upcoming Agenda</div>
             <div className="space-y-3">
               {[...normalizedItems].sort((a, b) => a.startDate - b.startDate).slice(0, 12).map((item) => (
-                <button key={item.id} type="button" onClick={() => { setCursorDate(startOfDay(item.startDate)); openItem(item); }} className="w-full text-left border-b border-slate-100 pb-3 last:border-b-0">
-                  <div className="text-sm font-semibold text-slate-900">{item.title}</div>
-                  <div className="text-xs text-slate-500 mt-1">{item.type} · {new Date(item.startsAt).toLocaleString()}</div>
+                <button key={item.id} type="button" onClick={() => { setCursorDate(startOfDay(item.startDate)); openItem(item); }} className="w-full text-left pb-3 last:border-b-0" style={{ borderBottom: "1px solid var(--border-secondary)" }}>
+                  <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{item.title}</div>
+                  <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{item.type} · {new Date(item.startsAt).toLocaleString()}</div>
                 </button>
               ))}
             </div>
