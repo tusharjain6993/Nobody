@@ -58,10 +58,30 @@ jobs:
       - name: Setup SSH key
         shell: bash
         run: |
+          set -euo pipefail
+
+          VM_HOST="${{ secrets.VM_HOST }}"
+          VM_PORT="${{ secrets.VM_PORT || '22' }}"
+
+          if [ -z "$VM_HOST" ]; then
+            echo "VM_HOST secret is empty."
+            exit 1
+          fi
+
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.VM_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -p "${{ secrets.VM_PORT || '22' }}" "${{ secrets.VM_HOST }}" >> ~/.ssh/known_hosts
+
+          if ! ssh-keyscan -T 10 -p "$VM_PORT" "$VM_HOST" >> ~/.ssh/known_hosts 2>/tmp/ssh-keyscan.err; then
+            echo "ssh-keyscan failed for $VM_HOST:$VM_PORT"
+            echo "Common causes:"
+            echo "- the VM public IP changed after stop/start"
+            echo "- the VM is still stopped"
+            echo "- SSH is not running on the VM"
+            echo "- the firewall/security group blocks port $VM_PORT"
+            cat /tmp/ssh-keyscan.err
+            exit 1
+          fi
 
       - name: Sync build to VM
         shell: bash
