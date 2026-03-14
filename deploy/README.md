@@ -63,6 +63,8 @@ Active release:
 
 `nginx` serves from `current`.
 
+The activation step verifies that the uploaded release contains `index.html` before switching `current`, and old releases are pruned by age while keeping the active release intact.
+
 ## Important behavior
 
 - No backend is deployed.
