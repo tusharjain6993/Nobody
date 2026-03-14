@@ -33,11 +33,12 @@ function Sidebar({ collapsed, onToggle, onNavigate }) {
       { to: "/minister/calendar", icon: CalendarLtrRegular, label: "Calendar" },
     ] : []),
     ...(userRole === "deo" ? [
+      { to: "/verification-requests", icon: GavelRegular, label: "Verification Requests" },
       { to: "/meetings", icon: CalendarLtrRegular, label: "Calendar" },
     ] : []),
     ...(userRole === "citizen" ? [
       { to: "/new-case", icon: DocumentAddRegular, label: "Services" },
-      { to: "/my-cases", icon: GavelRegular, label: "My Requests" },
+      { to: "/my-cases", icon: GavelRegular, label: "Complaints" },
       { to: "/meetings", icon: CalendarLtrRegular, label: "Meetings" },
     ] : []),
     { to: "/settings", icon: SettingsRegular, label: "Settings" },

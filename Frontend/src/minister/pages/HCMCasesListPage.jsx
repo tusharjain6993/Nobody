@@ -16,12 +16,12 @@ function isMyComplaint(item, myAdminId) {
 
 function isMyMeeting(item, myAdminId) {
   const ownedByMe = Number(item.assignedAdminUserId || item.referralAdminUserId || 0) === Number(myAdminId || 0);
-  return ownedByMe && !["rejected"].includes(item.status) && !["completed", "no_show", "cancelled"].includes(item.executionStatus || "pending");
+  return ownedByMe && !["rejected"].includes(item.status) && !["completed", "cancelled"].includes(item.executionStatus || "pending");
 }
 
 function isResolvedItem(item) {
   if (item.complaintId) return ["resolved", "completed"].includes(item.status);
-  return item.status === "rejected" || ["completed", "no_show", "cancelled"].includes(item.executionStatus || "pending");
+  return item.status === "rejected" || ["completed", "cancelled"].includes(item.executionStatus || "pending");
 }
 
 function getQueueBuckets(data) {
@@ -73,9 +73,9 @@ export default function HCMCasesListPage() {
         item.title,
         item.purpose,
         item.citizenSnapshot?.name,
+        item.citizenSnapshot?.phoneNumbers?.join(" "),
         item.citizenSnapshot?.citizenId,
         item.currentOwner,
-        item.nextAction,
         item.status,
         item.statusLabel,
         item.complaintId,
@@ -166,13 +166,13 @@ export default function HCMCasesListPage() {
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                     <h3 className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>{item.title || item.purpose}</h3>
                     <span className="portal-chip" style={{ background: "var(--accent-primary-subtle)", color: "var(--accent-primary)" }}>{item.complaintId || item.requestId}</span>
-                    {item.priority && <span className="portal-chip">{item.priority}</span>}
+                    {(item.priority === "VIP" || item.priority === "HIGH") && <span className="portal-chip">VIP Meeting</span>}
                   </div>
                   <div className="portal-meta">
                     <span>{item.citizenSnapshot?.name} · {item.citizenSnapshot?.citizenId}</span>
+                    <span>{item.citizenSnapshot?.phoneNumbers?.[0] || "Phone unavailable"}</span>
                     {item.complaintId && <span>{item.assignedAdminName ? `Assigned: ${item.assignedAdminName}` : "Pool item"}</span>}
                     <span>Owner: {item.currentOwner}</span>
-                    <span>Next: {item.nextAction}</span>
                     <span>Created {new Date(item.createdAt).toLocaleDateString()}</span>
                   </div>
                   {(item.relatedComplaint || item.relatedMeeting) && (

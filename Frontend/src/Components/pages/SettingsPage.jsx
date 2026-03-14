@@ -83,6 +83,13 @@ export default function SettingsPage() {
 
   const renderContent = () => {
     if (active === "profile") {
+      const roleSpecificDetails = user?.role === "admin"
+        ? "Admin profile controls focus on queue ownership, review desk context, and supervisory visibility."
+        : user?.role === "deo"
+          ? "DEO settings focus on verification requests and calendar execution responsibilities."
+          : user?.role === "minister"
+            ? "Minister settings focus on dashboard visibility and calendar-only access."
+            : "Citizen settings focus on profile completeness and request communication details.";
       return (
         <div>
           <h2 className="settings-section-title" style={{ fontWeight: 800, fontSize: "1.1rem", margin: "0 0 1rem" }}>
@@ -100,6 +107,7 @@ export default function SettingsPage() {
               <div className="settings-muted" style={{ fontSize: "0.78rem", marginTop: "0.15rem" }}>{profile.email}</div>
               {sessionExpiresAt && <div className="settings-muted" style={{ fontSize: "0.78rem", marginTop: "0.15rem" }}>Session expires: {new Date(sessionExpiresAt).toLocaleString()}</div>}
               {profileCompletion && <div className="settings-muted" style={{ fontSize: "0.78rem", marginTop: "0.15rem" }}>Citizen profile completeness: {profileCompletion.percent}%</div>}
+              <div className="settings-muted" style={{ fontSize: "0.78rem", marginTop: "0.25rem", maxWidth: "420px" }}>{roleSpecificDetails}</div>
             </div>
           </div>
         </div>
@@ -141,16 +149,32 @@ export default function SettingsPage() {
     }
 
     if (active === "notifications") {
+      const notificationOptions = user?.role === "citizen"
+        ? [
+          { label: "Meeting Alerts", sub: "Scheduling, rejection, and citizen-facing request updates.", state: emailNotif, setState: setEmailNotif },
+          { label: "Complaint Alerts", sub: "Resolution and escalation changes for your complaints.", state: smsNotif, setState: setSmsNotif },
+        ]
+        : user?.role === "deo"
+          ? [
+            { label: "Verification Requests", sub: "Receive new citizen verification assignments from admins.", state: emailNotif, setState: setEmailNotif },
+            { label: "Calendar Execution Alerts", sub: "Receive DEO calendar and follow-up reminders.", state: smsNotif, setState: setSmsNotif },
+          ]
+          : user?.role === "minister"
+            ? [
+              { label: "VIP Meeting Alerts", sub: "Receive notifications for minister-visible citizen meetings.", state: emailNotif, setState: setEmailNotif },
+              { label: "Calendar Updates", sub: "Receive DEO-driven calendar changes.", state: smsNotif, setState: setSmsNotif },
+            ]
+            : [
+              { label: "Queue Alerts", sub: "Receive complaint and meeting queue updates.", state: emailNotif, setState: setEmailNotif },
+              { label: "Verification / Calendar Alerts", sub: "Receive workflow updates from DEO actions and scheduling changes.", state: smsNotif, setState: setSmsNotif },
+            ];
       return (
         <div>
           <h2 className="settings-section-title" style={{ fontWeight: 800, fontSize: "1.1rem", margin: "0 0 1rem" }}>
             🔔 Notification Preferences
           </h2>
           <div className="settings-card" style={card}>
-            {[
-              { label: "Email Notifications", sub: "Receive demo alerts in the portal header.", state: emailNotif, setState: setEmailNotif },
-              { label: "SMS Notifications", sub: "Visual-only toggle for demo flows.", state: smsNotif, setState: setSmsNotif },
-            ].map((item) => (
+            {notificationOptions.map((item) => (
               <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.85rem 0", borderBottom: "1px solid var(--border-secondary)" }}>
                 <div>
                   <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>{item.label}</div>

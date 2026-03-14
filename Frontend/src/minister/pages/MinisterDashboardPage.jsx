@@ -36,7 +36,7 @@ export default function MinisterDashboardPage() {
       <div className="portal-page__hero">
         <div className="portal-page__eyebrow">Minister Analytics</div>
         <h1 className="portal-page__title">Minister Overview</h1>
-        <p className="portal-page__desc">This dashboard updates from DEO calendar entries and from citizen meetings once admins approve and schedule them.</p>
+        <p className="portal-page__desc">This dashboard updates from DEO calendar entries and from citizen VIP meetings once admins approve and schedule them.</p>
       </div>
 
       <div className="portal-grid portal-grid--4">
@@ -47,10 +47,10 @@ export default function MinisterDashboardPage() {
       </div>
 
       <div className="portal-grid portal-grid--4">
-        <Card label="High Priority Queue" value={(operations?.priorityBreakdown || []).find((item) => item.priority === "HIGH")?.count || 0} sub="Meetings marked high with mandatory reason" />
+        <Card label="VIP Meetings" value={(operations?.priorityBreakdown || []).find((item) => item.priority === "VIP")?.count || 0} sub="Citizen meetings promoted to the minister calendar" />
         <Card label="Verification Backlog" value={operations?.verificationBacklog || 0} sub="Requests still moving through verification and review" />
         <Card label="Completed Meetings" value={operations?.meetingOutcomes?.completed || 0} sub="Citizen meetings marked complete" />
-        <Card label="No-Show Meetings" value={operations?.meetingOutcomes?.noShow || 0} sub="Scheduled citizen meetings that ended as no-show" />
+        <Card label="Cancelled Meetings" value={operations?.meetingOutcomes?.cancelled || 0} sub="Scheduled citizen meetings cancelled after scheduling" />
       </div>
 
       <div className="portal-grid portal-grid--2">

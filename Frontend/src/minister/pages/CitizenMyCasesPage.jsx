@@ -83,15 +83,15 @@ export default function CitizenMyCasesPage() {
     <div className="portal-page">
       <div className="portal-page__hero">
         <div className="portal-page__eyebrow">Citizen Desk</div>
-        <h1 className="portal-page__title" style={{ fontSize: "2.5rem" }}>My Requests</h1>
-        <p className="portal-page__desc">Track meeting requests, complaints, schedules, escalation results, and resolution documents.</p>
+        <h1 className="portal-page__title" style={{ fontSize: "2.5rem" }}>Complaints</h1>
+        <p className="portal-page__desc">Track complaints, linked escalations, resolution updates, and related meeting references in one place.</p>
       </div>
 
       <div className="portal-tabs">
         {[
           ["all", `All (${data.meetings.length + data.complaints.length})`],
-          ["meeting", `Meetings (${data.meetings.length})`],
           ["complaint", `Complaints (${data.complaints.length})`],
+          ["meeting", `Meeting Escalations (${data.meetings.length})`],
         ].map(([value, label]) => (
           <button key={value} type="button" onClick={() => setTab(value)} className={`portal-tab ${tab === value ? "portal-tab--active" : ""}`}>{label}</button>
         ))}

@@ -8,14 +8,26 @@ function sanitizeSelectedFiles(fileList) {
   return Array.from(fileList || []).filter((file) => file && typeof file.name === "string");
 }
 
+function limitDocumentsForDemo(documents = []) {
+  return documents.map((doc) => {
+    const data = String(doc?.data || "");
+    if (data.length <= 220000) return doc;
+    return {
+      ...doc,
+      data: data.slice(0, 220000),
+      name: `${doc.name} (trimmed for demo storage)`,
+    };
+  });
+}
+
 export default function HCMNewCasePage() {
   const [activeTab, setActiveTab] = useState("");
   const [admins, setAdmins] = useState([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-  const [meetingForm, setMeetingForm] = useState({ purpose: "", referralAdminUserId: "", files: [] });
-  const [complaintForm, setComplaintForm] = useState({ title: "", details: "", complaintDate: "", complaintLocation: "", complaintType: "", files: [] });
+  const [meetingForm, setMeetingForm] = useState({ purpose: "", preferredDate: "", preferredTime: "", referralAdminUserId: "", files: [] });
+  const [complaintForm, setComplaintForm] = useState({ title: "", details: "", complaintLocation: "", complaintType: "", files: [] });
 
   useEffect(() => {
     adminDirectoryApi.list().then((res) => setAdmins(res.admins || [])).catch(() => setAdmins([]));
@@ -27,14 +39,16 @@ export default function HCMNewCasePage() {
     setError("");
     setSuccess("");
     try {
-      const attachmentDocs = await filesToDocuments(meetingForm.files);
+      const attachmentDocs = limitDocumentsForDemo(await filesToDocuments(meetingForm.files));
       const res = await citizenApi.createMeetingRequest({
         purpose: meetingForm.purpose,
+        preferredDate: meetingForm.preferredDate,
+        preferredTime: meetingForm.preferredTime,
         referralAdminUserId: meetingForm.referralAdminUserId,
         attachments: attachmentDocs,
       });
       setSuccess(`Meeting request ${res.meetingRequest.requestId} submitted`);
-      setMeetingForm({ purpose: "", referralAdminUserId: "", files: [] });
+      setMeetingForm({ purpose: "", preferredDate: "", preferredTime: "", referralAdminUserId: "", files: [] });
     } catch (err) {
       setError(err.message || "Unable to submit meeting request");
     } finally {
@@ -49,17 +63,16 @@ export default function HCMNewCasePage() {
     setSuccess("");
     try {
       validateComplaintFiles(complaintForm.files);
-      const attachments = await filesToDocuments(complaintForm.files);
+      const attachments = limitDocumentsForDemo(await filesToDocuments(complaintForm.files));
       const res = await citizenApi.createComplaint({
         title: complaintForm.title,
         details: complaintForm.details,
-        complaintDate: complaintForm.complaintDate,
         complaintLocation: complaintForm.complaintLocation,
         complaintType: complaintForm.complaintType,
         attachments,
       });
       setSuccess(`Complaint ${res.complaint.complaintId} submitted`);
-      setComplaintForm({ title: "", details: "", complaintDate: "", complaintLocation: "", complaintType: "", files: [] });
+      setComplaintForm({ title: "", details: "", complaintLocation: "", complaintType: "", files: [] });
     } catch (err) {
       setError(err.message || "Unable to submit complaint");
     } finally {
@@ -110,6 +123,14 @@ export default function HCMNewCasePage() {
               </select>
             </div>
             <div className="portal-field">
+              <label className="portal-field__label">Preferred Date</label>
+              <input className="portal-input" type="date" value={meetingForm.preferredDate} onChange={(event) => setMeetingForm((current) => ({ ...current, preferredDate: event.target.value }))} />
+            </div>
+            <div className="portal-field">
+              <label className="portal-field__label">Preferred Time</label>
+              <input className="portal-input" type="time" value={meetingForm.preferredTime} onChange={(event) => setMeetingForm((current) => ({ ...current, preferredTime: event.target.value }))} />
+            </div>
+            <div className="portal-field">
               <label className="portal-field__label">Optional Document Upload</label>
               <input className="portal-input" type="file" multiple onChange={(event) => setMeetingForm((current) => ({ ...current, files: sanitizeSelectedFiles(event.target.files) }))} />
               {meetingForm.files.length > 0 && <div className="text-sm" style={{ color: "var(--text-tertiary)" }}>{meetingForm.files.length} file(s) selected</div>}
@@ -131,10 +152,6 @@ export default function HCMNewCasePage() {
             <div className="portal-field">
               <label className="portal-field__label">Complaint Details</label>
               <textarea className="portal-textarea" rows={6} value={complaintForm.details} onChange={(event) => setComplaintForm((current) => ({ ...current, details: event.target.value }))} placeholder="Describe the complaint clearly" />
-            </div>
-            <div className="portal-field">
-              <label className="portal-field__label">Complaint Date</label>
-              <input className="portal-input" type="date" value={complaintForm.complaintDate} onChange={(event) => setComplaintForm((current) => ({ ...current, complaintDate: event.target.value }))} />
             </div>
             <div className="portal-field">
               <label className="portal-field__label">Location</label>

@@ -5,6 +5,9 @@ import { filesToDocuments } from "../../utils/fileHelpers";
 import { useHCMAuth } from "../HCMAuthContext";
 import { downloadCaseSummaryPdf } from "../../utils/caseSummary";
 
+const inputClass = "portal-input";
+const textAreaClass = "portal-textarea";
+
 function Section({ title, children, action }) {
   return (
     <section className="portal-card">
@@ -17,18 +20,14 @@ function Section({ title, children, action }) {
   );
 }
 
-const inputClass = "portal-input";
-const textAreaClass = "portal-textarea";
-
 function buildMeetingActions(item) {
   const actions = [];
-  if (item.status === "submitted" || item.status === "under_review") actions.push(["verification", "Verification Needed"]);
-  if (item.status === "verification_needed") actions.push(["logVerification", "Log Verification"]);
-  if (item.status === "under_review") actions.push(["approve", "Approve"]);
+  if (["submitted", "under_review"].includes(item.status)) actions.push(["verification", "Send for Verification"]);
+  if (["submitted", "under_review"].includes(item.status)) actions.push(["approve", "Approve"]);
   if (["submitted", "verification_needed", "under_review", "approved"].includes(item.status)) actions.push(["reject", "Reject"]);
-  if (item.status === "approved") actions.push(["revertApproval", "Revert Approval"]);
-  if (["approved", "scheduled"].includes(item.status)) actions.push(["schedule", item.status === "scheduled" ? "Reschedule" : "Schedule"]);
-  if (item.status === "scheduled" && item.executionStatus === "pending") actions.push(["markCompleted", "Mark Completed"], ["markNoShow", "Mark No-Show"], ["cancel", "Cancel"]);
+  if (item.status === "approved") actions.push(["revertApproval", "Return to Review"]);
+  if (["approved", "scheduled"].includes(item.status)) actions.push(["schedule", item.status === "scheduled" ? "Reschedule" : "Schedule Meeting"]);
+  if (item.status === "scheduled" && item.executionStatus === "pending") actions.push(["markCompleted", "Mark Completed"], ["cancel", "Cancel Meeting"]);
   return actions;
 }
 
@@ -67,15 +66,13 @@ function Timeline({ items = [] }) {
 function buildSuccessMessage(itemType, item, action) {
   const caseId = itemType === "meeting" ? item?.requestId : item?.complaintId;
   const messages = {
-    verification: `${caseId} was moved to verification.`,
-    logVerification: `${caseId} verification outcome was logged.`,
+    verification: `${caseId} was sent to DEO verification.`,
     approve: `${caseId} was approved.`,
     schedule: `${caseId} was scheduled successfully.`,
     reject: `${caseId} was rejected.`,
-    revertApproval: `${caseId} approval was reverted to review.`,
+    revertApproval: `${caseId} was returned to review.`,
     cancel: `${caseId} was cancelled.`,
     markCompleted: `${caseId} was marked completed.`,
-    markNoShow: `${caseId} was marked as no-show.`,
     assign: `${caseId} was assigned to you.`,
     reassign: `${caseId} was reassigned successfully.`,
     department: `${caseId} department flow was updated.`,
@@ -92,29 +89,13 @@ function buildSuccessMessage(itemType, item, action) {
 function SuccessModal({ open, message, onClose }) {
   if (!open) return null;
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-center justify-center px-4"
-      style={{ background: "rgba(15, 23, 42, 0.55)", backdropFilter: "blur(6px)" }}
-    >
-      <div
-        className="w-full max-w-md rounded-[28px] border shadow-2xl p-6 text-center"
-        style={{
-          background: "linear-gradient(180deg, var(--bg-primary), color-mix(in srgb, var(--bg-primary) 84%, var(--accent-primary-subtle) 16%))",
-          borderColor: "var(--border-primary)",
-        }}
-      >
-        <div
-          className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full"
-          style={{ background: "linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))", color: "#fff", fontSize: "1.75rem", boxShadow: "var(--shadow-card)" }}
-        >
-          ✓
-        </div>
+    <div className="fixed inset-0 z-[120] flex items-center justify-center px-4" style={{ background: "rgba(15, 23, 42, 0.55)", backdropFilter: "blur(6px)" }}>
+      <div className="w-full max-w-md rounded-[28px] border shadow-2xl p-6 text-center" style={{ background: "linear-gradient(180deg, var(--bg-primary), color-mix(in srgb, var(--bg-primary) 84%, var(--accent-primary-subtle) 16%))", borderColor: "var(--border-primary)" }}>
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: "linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))", color: "#fff", fontSize: "1.75rem", boxShadow: "var(--shadow-card)" }}>✓</div>
         <div className="portal-page__eyebrow" style={{ justifyContent: "center", marginBottom: "0.7rem" }}>Action Completed</div>
         <h3 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Workflow Updated</h3>
         <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>{message}</p>
-        <button type="button" onClick={onClose} className="portal-btn mt-5 w-full">
-          Continue
-        </button>
+        <button type="button" onClick={onClose} className="portal-btn mt-5 w-full">Continue</button>
       </div>
     </div>
   );
@@ -130,7 +111,6 @@ export default function HCMCaseDetailPage() {
   const [admins, setAdmins] = useState([]);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
-  const [activePanel, setActivePanel] = useState("overview");
   const [selectedAction, setSelectedAction] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [resolutionFiles, setResolutionFiles] = useState([]);
@@ -141,8 +121,7 @@ export default function HCMCaseDetailPage() {
     scheduleDate: "",
     scheduleTime: "",
     scheduleLocation: "",
-    priority: "MEDIUM",
-    priorityReason: "",
+    isVip: false,
     actionReason: "",
   });
   const [complaintForm, setComplaintForm] = useState({
@@ -160,12 +139,10 @@ export default function HCMCaseDetailPage() {
   });
 
   const focusedAction = searchParams.get("action") || "";
+  const activeAction = focusedAction || selectedAction;
 
   useEffect(() => {
-    if (focusedAction) {
-      setActivePanel("actions");
-      setSelectedAction(focusedAction);
-    }
+    if (focusedAction) setSelectedAction(focusedAction);
   }, [focusedAction]);
 
   useEffect(() => {
@@ -175,14 +152,14 @@ export default function HCMCaseDetailPage() {
         setError("");
         if (itemType === "meeting") {
           const res = await workItemsApi.getMeetingRequest(id);
-          if (!mounted) return;
-          setItem(res.meetingRequest);
+          if (mounted) setItem(res.meetingRequest);
         } else {
           const res = await workItemsApi.getComplaint(id);
-          if (!mounted) return;
-          setItem(res.complaint);
-          setContacts(res.contacts || []);
-          setAdmins(res.admins || []);
+          if (mounted) {
+            setItem(res.complaint);
+            setContacts(res.contacts || []);
+            setAdmins(res.admins || []);
+          }
         }
       } catch (err) {
         if (mounted) setError(err.message || "Failed to load case");
@@ -197,12 +174,11 @@ export default function HCMCaseDetailPage() {
     if (itemType === "meeting") {
       setMeetingForm((current) => ({
         ...current,
-        reviewNotes: item.adminNotes || current.reviewNotes,
-        scheduleDate: item.scheduleDate || current.scheduleDate,
-        scheduleTime: item.scheduleTime || current.scheduleTime,
-        scheduleLocation: item.scheduleLocation || current.scheduleLocation,
-        priority: item.priority || current.priority || "MEDIUM",
-        priorityReason: item.priorityReason || current.priorityReason,
+        reviewNotes: item.adminNotes || "",
+        scheduleDate: item.scheduleDate || "",
+        scheduleTime: item.scheduleTime || "",
+        scheduleLocation: item.scheduleLocation || "",
+        isVip: item.priority === "VIP" || item.priority === "HIGH",
       }));
     } else {
       setComplaintForm((current) => ({
@@ -227,8 +203,6 @@ export default function HCMCaseDetailPage() {
     ? buildMeetingActions(item || {})
     : buildComplaintActions(item || {}, user?.id);
 
-  const activeAction = focusedAction || selectedAction;
-
   async function runAction(fn, { stayOnPage = true, navigateTo = "", successAction = "" } = {}) {
     setActionLoading(true);
     setError("");
@@ -238,15 +212,12 @@ export default function HCMCaseDetailPage() {
       setItem(nextItem);
       if (res.contacts) setContacts(res.contacts);
       if (res.admins) setAdmins(res.admins);
-      if (successAction) {
-        setSuccessMessage(buildSuccessMessage(itemType, nextItem, successAction));
-      }
+      if (successAction) setSuccessMessage(buildSuccessMessage(itemType, nextItem, successAction));
       if (res.meetingRequest && navigateTo) {
         setSelectedAction("");
         navigate(navigateTo.replace(":meetingId", res.meetingRequest._id));
       } else if (!stayOnPage) {
         setSelectedAction("");
-        setActivePanel("actions");
         navigate(`/cases/${itemType}/${id}`);
       }
     } catch (err) {
@@ -262,11 +233,10 @@ export default function HCMCaseDetailPage() {
     ? [
       ["Case ID", item.requestId],
       ["Citizen", item.citizenSnapshot?.name],
+      ["Phone", item.citizenSnapshot?.phoneNumbers?.[0] || ""],
       ["Status", item.statusLabel],
       ["Current owner", item.currentOwner],
-      ["Next action", item.nextAction],
-      ["Priority", item.priority || "MEDIUM"],
-      ["Priority reason", item.priorityReason || ""],
+      ["Meeting type", item.priority === "VIP" || item.priority === "HIGH" ? "VIP" : "Standard"],
       ["Schedule", item.scheduleDate ? `${item.scheduleDate} ${item.scheduleTime || ""}` : "Pending"],
       ["Location", item.scheduleLocation || ""],
       ["Execution status", item.executionStatusLabel || "Pending"],
@@ -274,9 +244,9 @@ export default function HCMCaseDetailPage() {
     : [
       ["Case ID", item.complaintId],
       ["Citizen", item.citizenSnapshot?.name],
+      ["Phone", item.citizenSnapshot?.phoneNumbers?.[0] || ""],
       ["Status", item.statusLabel],
       ["Current owner", item.currentOwner],
-      ["Next action", item.nextAction],
       ["Department", item.department || "Pending"],
       ["Officer", item.officerName || item.manualContact || ""],
       ["Resolution summary", item.resolutionSummary || ""],
@@ -286,6 +256,7 @@ export default function HCMCaseDetailPage() {
   return (
     <div className="portal-page">
       <SuccessModal open={!!successMessage} message={successMessage} onClose={() => setSuccessMessage("")} />
+
       <div className="portal-toolbar">
         <div>
           <button type="button" onClick={() => navigate("/cases")} className="portal-link-btn">← Back to Work Queue</button>
@@ -306,20 +277,7 @@ export default function HCMCaseDetailPage() {
 
       {error && <div className="portal-alert portal-alert--error">{error}</div>}
 
-      <div className="portal-tabs">
-        {[
-          ["overview", "Overview"],
-          ["timeline", "Timeline"],
-          ["related", "Related"],
-          ["actions", "Actions"],
-        ].map(([value, label]) => (
-          <button key={value} type="button" onClick={() => setActivePanel(value)} className={`portal-tab ${activePanel === value ? "portal-tab--active" : ""}`}>
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {activePanel === "overview" && <Section title="Case Record">
+      <Section title="Case Record">
         <div className="portal-page__eyebrow" style={{ marginBottom: "0.9rem" }}>{itemType === "meeting" ? "Meeting Workflow" : "Complaint Workflow"}</div>
         <div className="portal-grid portal-grid--4">
           <div className="portal-card portal-card--soft">
@@ -333,22 +291,28 @@ export default function HCMCaseDetailPage() {
             <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>Status reason: {item.statusReason || "No explicit reason captured."}</div>
           </div>
           <div className="portal-card portal-card--soft">
-            <div className="portal-stat__label">Next Expected Action</div>
-            <div className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{item.nextAction}</div>
-          </div>
-          <div className="portal-card portal-card--soft">
             <div className="portal-stat__label">Citizen</div>
             <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>{item.citizenSnapshot?.name}</div>
             <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{item.citizenSnapshot?.citizenId || "Citizen ID unavailable"}</div>
+            <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{item.citizenSnapshot?.phoneNumbers?.[0] || "Phone unavailable"}</div>
+          </div>
+          <div className="portal-card portal-card--soft">
+            <div className="portal-stat__label">{itemType === "meeting" ? "Meeting Setup" : "Complaint Routing"}</div>
+            <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>
+              {itemType === "meeting"
+                ? (item.priority === "VIP" || item.priority === "HIGH" ? "VIP Meeting" : "Standard Meeting")
+                : (item.department || "Pending")}
+            </div>
+            <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+              {itemType === "meeting"
+                ? (item.scheduleDate ? `${item.scheduleDate} ${item.scheduleTime || ""}` : "Date and time pending")
+                : (item.officerName || item.manualContact || "Officer not selected")}
+            </div>
           </div>
         </div>
-      </Section>}
+      </Section>
 
-      {activePanel === "timeline" && <Section title="Master Timeline">
-        <Timeline items={item.masterTimeline || []} />
-      </Section>}
-
-      {activePanel === "related" && <Section title="Related Records">
+      <Section title="Related Records">
         <div className="portal-grid portal-grid--3">
           <div className="portal-card portal-card--soft">
             <div className="portal-stat__label">Linked Complaint</div>
@@ -379,9 +343,7 @@ export default function HCMCaseDetailPage() {
             {(item.relatedNotifications || []).length ? (
               <div className="space-y-2 mt-2">
                 {item.relatedNotifications.slice(0, 3).map((note) => (
-                  <div key={note._id} className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                    {note.type}: {note.message}
-                  </div>
+                  <div key={note._id} className="text-xs" style={{ color: "var(--text-secondary)" }}>{note.type}: {note.message}</div>
                 ))}
               </div>
             ) : (
@@ -389,9 +351,13 @@ export default function HCMCaseDetailPage() {
             )}
           </div>
         </div>
-      </Section>}
+      </Section>
 
-      {activePanel === "actions" && <Section title="Workflow Actions">
+      <Section title="Master Timeline">
+        <Timeline items={item.masterTimeline || []} />
+      </Section>
+
+      <Section title="Workflow Actions">
         <div className="grid md:grid-cols-[minmax(0,320px)_auto] gap-3 items-start mb-4">
           <select
             value={activeAction}
@@ -414,41 +380,22 @@ export default function HCMCaseDetailPage() {
             <option value="">Select workflow action</option>
             {availableActions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          {activeAction && <button type="button" onClick={() => { setSelectedAction(""); setActivePanel("overview"); navigate(`/cases/${itemType}/${id}`); }} className="portal-btn-secondary">Clear Action</button>}
+          {activeAction && <button type="button" onClick={() => { setSelectedAction(""); navigate(`/cases/${itemType}/${id}`); }} className="portal-btn-secondary">Clear Action</button>}
         </div>
 
-        {!activeAction && (
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            Select an action tab above. Invalid transitions are blocked and each approved change is written into the immutable timeline.
-          </p>
-        )}
+        {!activeAction && <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Choose the next valid action for this case.</p>}
 
         {itemType === "meeting" && activeAction === "verification" && (
           <div className="space-y-3">
-            <textarea value={meetingForm.reviewNotes} onChange={(event) => setMeetingForm((current) => ({ ...current, reviewNotes: event.target.value }))} rows={3} placeholder="Explain why verification is needed" className={textAreaClass} />
-            <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.markMeetingVerificationNeeded(id, meetingForm.reviewNotes), { stayOnPage: false, successAction: "verification" })} className="portal-btn">Send to Verification</button>
-          </div>
-        )}
-
-        {itemType === "meeting" && activeAction === "logVerification" && (
-          <div className="space-y-3">
-            <textarea value={meetingForm.verificationOutcome} onChange={(event) => setMeetingForm((current) => ({ ...current, verificationOutcome: event.target.value }))} rows={3} placeholder="Record the verification outcome" className={textAreaClass} />
-            <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.logMeetingVerificationOutcome(id, meetingForm.verificationOutcome), { stayOnPage: false, successAction: "logVerification" })} className="portal-btn">Log Outcome</button>
+            <textarea value={meetingForm.reviewNotes} onChange={(event) => setMeetingForm((current) => ({ ...current, reviewNotes: event.target.value }))} rows={3} placeholder="Add DEO verification comment if needed" className={textAreaClass} />
+            <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.markMeetingVerificationNeeded(id, meetingForm.reviewNotes), { stayOnPage: false, successAction: "verification" })} className="portal-btn">Send to DEO Verification</button>
           </div>
         )}
 
         {itemType === "meeting" && activeAction === "approve" && (
           <div className="space-y-3">
-            <div className="grid md:grid-cols-2 gap-3">
-              <select value={meetingForm.priority} onChange={(event) => setMeetingForm((current) => ({ ...current, priority: event.target.value }))} className={inputClass}>
-                <option value="LOW">Low Priority</option>
-                <option value="MEDIUM">Medium Priority</option>
-                <option value="HIGH">High Priority</option>
-              </select>
-              <input value={meetingForm.priorityReason} onChange={(event) => setMeetingForm((current) => ({ ...current, priorityReason: event.target.value }))} placeholder="Mandatory reason for High priority" className={inputClass} />
-            </div>
-            <textarea value={meetingForm.reviewNotes} onChange={(event) => setMeetingForm((current) => ({ ...current, reviewNotes: event.target.value }))} rows={3} placeholder="Approval notes" className={textAreaClass} />
-            <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.approveMeetingRequest(id, { priority: meetingForm.priority, priorityReason: meetingForm.priorityReason, adminNotes: meetingForm.reviewNotes }), { stayOnPage: false, successAction: "approve" })} className="portal-btn">Approve Request</button>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Approve this meeting so scheduling becomes available immediately.</p>
+            <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.approveMeetingRequest(id, {}), { stayOnPage: false, successAction: "approve" })} className="portal-btn">Approve Request</button>
           </div>
         )}
 
@@ -458,29 +405,24 @@ export default function HCMCaseDetailPage() {
               <input value={meetingForm.scheduleDate} onChange={(event) => setMeetingForm((current) => ({ ...current, scheduleDate: event.target.value }))} type="date" className={inputClass} />
               <input value={meetingForm.scheduleTime} onChange={(event) => setMeetingForm((current) => ({ ...current, scheduleTime: event.target.value }))} type="time" className={inputClass} />
             </div>
-            <div className="grid md:grid-cols-2 gap-3">
-              <input value={meetingForm.scheduleLocation} onChange={(event) => setMeetingForm((current) => ({ ...current, scheduleLocation: event.target.value }))} placeholder="Meeting location" className={inputClass} />
-              <input value={meetingForm.priorityReason} onChange={(event) => setMeetingForm((current) => ({ ...current, priorityReason: event.target.value }))} placeholder="Priority reason" className={inputClass} />
-            </div>
-            <select value={meetingForm.priority} onChange={(event) => setMeetingForm((current) => ({ ...current, priority: event.target.value }))} className={inputClass}>
-              <option value="LOW">Low Priority</option>
-              <option value="MEDIUM">Medium Priority</option>
-              <option value="HIGH">High Priority</option>
-            </select>
-            <textarea value={meetingForm.reviewNotes} onChange={(event) => setMeetingForm((current) => ({ ...current, reviewNotes: event.target.value }))} rows={3} placeholder="Scheduling notes" className={textAreaClass} />
-            <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.scheduleMeetingRequest(id, { scheduleDate: meetingForm.scheduleDate, scheduleTime: meetingForm.scheduleTime, scheduleLocation: meetingForm.scheduleLocation, priority: meetingForm.priority, priorityReason: meetingForm.priorityReason, adminNotes: meetingForm.reviewNotes }), { stayOnPage: false, successAction: "schedule" })} className="portal-btn">{item.status === "scheduled" ? "Reschedule" : "Schedule"}</button>
+            <input value={meetingForm.scheduleLocation} onChange={(event) => setMeetingForm((current) => ({ ...current, scheduleLocation: event.target.value }))} placeholder="Meeting location" className={inputClass} />
+            <label className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+              <input type="checkbox" checked={meetingForm.isVip} onChange={(event) => setMeetingForm((current) => ({ ...current, isVip: event.target.checked }))} />
+              Mark as VIP meeting
+            </label>
+            <textarea value={meetingForm.reviewNotes} onChange={(event) => setMeetingForm((current) => ({ ...current, reviewNotes: event.target.value }))} rows={3} placeholder="Comments for the citizen or DEO (optional)" className={textAreaClass} />
+            <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.scheduleMeetingRequest(id, { scheduleDate: meetingForm.scheduleDate, scheduleTime: meetingForm.scheduleTime, scheduleLocation: meetingForm.scheduleLocation, adminNotes: meetingForm.reviewNotes, isVip: meetingForm.isVip }), { stayOnPage: false, successAction: "schedule" })} className="portal-btn">{item.status === "scheduled" ? "Reschedule Meeting" : "Schedule Meeting"}</button>
           </div>
         )}
 
-        {itemType === "meeting" && ["reject", "revertApproval", "cancel", "markCompleted", "markNoShow"].includes(activeAction) && (
+        {itemType === "meeting" && ["reject", "revertApproval", "cancel", "markCompleted"].includes(activeAction) && (
           <div className="space-y-3">
             <textarea value={meetingForm.actionReason} onChange={(event) => setMeetingForm((current) => ({ ...current, actionReason: event.target.value }))} rows={3} placeholder="Provide the reason or operational note" className={textAreaClass} />
             <div className="flex gap-2 flex-wrap">
               {activeAction === "reject" && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.rejectMeetingRequest(id, meetingForm.actionReason), { stayOnPage: false, successAction: "reject" })} className="portal-btn-danger">Reject Meeting</button>}
-              {activeAction === "revertApproval" && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.revertMeetingApproval(id, meetingForm.actionReason), { stayOnPage: false, successAction: "revertApproval" })} className="portal-btn-danger">Revert Approval</button>}
+              {activeAction === "revertApproval" && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.revertMeetingApproval(id, meetingForm.actionReason), { stayOnPage: false, successAction: "revertApproval" })} className="portal-btn-danger">Return to Review</button>}
               {activeAction === "cancel" && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.cancelScheduledMeeting(id, meetingForm.actionReason), { stayOnPage: false, successAction: "cancel" })} className="portal-btn-danger">Cancel Scheduled Meeting</button>}
               {activeAction === "markCompleted" && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.markMeetingCompleted(id, meetingForm.actionReason), { stayOnPage: false, successAction: "markCompleted" })} className="portal-btn">Mark Completed</button>}
-              {activeAction === "markNoShow" && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.markMeetingNoShow(id, meetingForm.actionReason), { stayOnPage: false, successAction: "markNoShow" })} className="portal-btn-danger">Mark No-Show</button>}
             </div>
           </div>
         )}
@@ -492,14 +434,10 @@ export default function HCMCaseDetailPage() {
                 <option value="">Select department</option>
                 {Array.from(new Set(contacts.map((contact) => contact.department))).map((department) => <option key={department} value={department}>{department}</option>)}
               </select>
-              <select
-                value={complaintForm.officerName}
-                onChange={(event) => {
-                  const selected = matchingContacts.find((contact) => contact.officerName === event.target.value);
-                  setComplaintForm((current) => ({ ...current, officerName: event.target.value, officerContact: selected ? `${selected.designation} · ${selected.phone}` : "" }));
-                }}
-                className={inputClass}
-              >
+              <select value={complaintForm.officerName} onChange={(event) => {
+                const selected = matchingContacts.find((contact) => contact.officerName === event.target.value);
+                setComplaintForm((current) => ({ ...current, officerName: event.target.value, officerContact: selected ? `${selected.designation} · ${selected.phone}` : "" }));
+              }} className={inputClass}>
                 <option value="">Select officer</option>
                 {matchingContacts.map((contact) => <option key={contact._id} value={contact.officerName}>{contact.officerName} · {contact.designation}</option>)}
               </select>
@@ -528,14 +466,7 @@ export default function HCMCaseDetailPage() {
           <div className="space-y-3">
             <textarea value={complaintForm.resolutionSummary} onChange={(event) => setComplaintForm((current) => ({ ...current, resolutionSummary: event.target.value }))} rows={3} placeholder="Resolution summary" className={textAreaClass} />
             <input type="file" multiple onChange={(event) => setResolutionFiles(Array.from(event.target.files || []))} className={inputClass} />
-            <button
-              type="button"
-              disabled={actionLoading}
-              onClick={() => runAction(async () => workItemsApi.resolveComplaint(id, { resolutionSummary: complaintForm.resolutionSummary, resolutionDocs: await filesToDocuments(resolutionFiles) }), { stayOnPage: false, successAction: "resolve" })}
-              className="portal-btn"
-            >
-              Resolve Complaint
-            </button>
+            <button type="button" disabled={actionLoading} onClick={() => runAction(async () => workItemsApi.resolveComplaint(id, { resolutionSummary: complaintForm.resolutionSummary, resolutionDocs: await filesToDocuments(resolutionFiles) }), { stayOnPage: false, successAction: "resolve" })} className="portal-btn">Resolve Complaint</button>
           </div>
         )}
 
@@ -567,7 +498,7 @@ export default function HCMCaseDetailPage() {
             <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.reopenComplaint(id, complaintForm.reopenReason), { stayOnPage: false, successAction: "reopen" })} className="portal-btn">Reopen Complaint</button>
           </div>
         )}
-      </Section>}
+      </Section>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useHCMAuth } from "../HCMAuthContext";
 import { calendarApi, meetingsApi } from "../ministerApi";
 import { filesToDocuments } from "../../utils/fileHelpers";
@@ -19,12 +19,15 @@ function statusBadgeClass(status) {
 
 export default function MeetingsPage() {
   const { user } = useHCMAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const { meetingId = "" } = useParams();
   const [events, setEvents] = useState([]);
   const [meetings, setMeetings] = useState([]);
+  const [verificationRequests, setVerificationRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [verificationNotes, setVerificationNotes] = useState({});
   const [form, setForm] = useState({
     title: "",
     details: "",
@@ -47,7 +50,11 @@ export default function MeetingsPage() {
         setLoading(true);
         if (user?.role === "deo") {
           const res = await calendarApi.list();
-          if (mounted) setEvents(res.events || []);
+          const verificationRes = await meetingsApi.list();
+          if (mounted) {
+            setEvents(res.events || []);
+            setVerificationRequests(verificationRes.verificationRequests || []);
+          }
         } else {
           const res = await meetingsApi.list();
           if (mounted) setMeetings(res.meetings || []);
@@ -125,7 +132,7 @@ export default function MeetingsPage() {
                     Visitor ID: {selectedMeeting.visitorId || "Pending"}
                   </div>
                   <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-                    Docket: {selectedMeeting.meetingDocket || "Pending"} · Priority: {selectedMeeting.priority || "MEDIUM"}
+                    Docket: {selectedMeeting.meetingDocket || "Pending"} · {selectedMeeting.priority === "VIP" || selectedMeeting.priority === "HIGH" ? "VIP Meeting" : "Standard Meeting"}
                   </div>
                 </div>
               </div>
@@ -136,8 +143,13 @@ export default function MeetingsPage() {
                   <div className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{selectedMeeting.currentOwner}</div>
                 </div>
                 <div className="portal-card portal-card--soft">
-                  <div className="portal-stat__label">Next Action</div>
-                  <div className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{selectedMeeting.nextAction}</div>
+                  <div className="portal-stat__label">Citizen Contact</div>
+                  <div className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {selectedMeeting.citizenSnapshot?.name || "Citizen"}
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+                    {selectedMeeting.citizenSnapshot?.phoneNumbers?.[0] || "Phone unavailable"}
+                  </div>
                 </div>
                 <div className="portal-card portal-card--soft">
                   <div className="portal-stat__label">Linked Complaint</div>
@@ -191,11 +203,10 @@ export default function MeetingsPage() {
                     rows: [
                       ["Request ID", selectedMeeting.requestId],
                       ["Citizen", selectedMeeting.citizenSnapshot?.name],
+                      ["Phone", selectedMeeting.citizenSnapshot?.phoneNumbers?.[0] || ""],
                       ["Status", selectedMeeting.statusLabel],
                       ["Owner", selectedMeeting.currentOwner],
-                      ["Next action", selectedMeeting.nextAction],
-                      ["Priority", selectedMeeting.priority || "MEDIUM"],
-                      ["Priority reason", selectedMeeting.priorityReason || ""],
+                      ["Meeting type", selectedMeeting.priority === "VIP" || selectedMeeting.priority === "HIGH" ? "VIP" : "Standard"],
                       ["Schedule", selectedMeeting.scheduleDate ? `${selectedMeeting.scheduleDate} ${selectedMeeting.scheduleTime || ""}` : "Pending"],
                       ["Location", selectedMeeting.scheduleLocation || ""],
                     ],
@@ -281,7 +292,7 @@ export default function MeetingsPage() {
                       <th className="px-4 py-4 text-left">Task ID</th>
                       <th className="px-4 py-4 text-left">Subject</th>
                       <th className="px-4 py-4 text-left">Department</th>
-                      <th className="px-4 py-4 text-left">Priority</th>
+                      <th className="px-4 py-4 text-left">Meeting Type</th>
                       <th className="px-4 py-4 text-left">Status</th>
                       <th className="px-4 py-4 text-left">Holder</th>
                       <th className="px-4 py-4 text-left">Officer</th>
@@ -306,7 +317,7 @@ export default function MeetingsPage() {
                           </td>
                           <td className="px-4 py-4 align-top">
                             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[0.7rem] font-semibold bg-violet-100 text-violet-700">
-                              {meeting.priority || (meeting.status === "rejected" ? "HIGH" : meeting.status === "scheduled" ? "MEDIUM" : "LOW")}
+                              {meeting.priority === "VIP" || meeting.priority === "HIGH" ? "VIP" : "Standard"}
                             </span>
                           </td>
                           <td className="px-4 py-4 align-top">
@@ -409,9 +420,9 @@ export default function MeetingsPage() {
                   <div>
                     <div className="text-[0.68rem] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 font-semibold inline-block mb-2">{meeting.requestId}</div>
                     <h3 className="font-bold text-slate-900 text-sm">{meeting.purpose}</h3>
-                    <div className="text-xs text-slate-500 mt-1">{meeting.citizenSnapshot?.name} · Referral: {meeting.referralAdminName}</div>
+                    <div className="text-xs text-slate-500 mt-1">{meeting.citizenSnapshot?.name} · {meeting.citizenSnapshot?.phoneNumbers?.[0] || "Phone unavailable"} · Referral: {meeting.referralAdminName}</div>
                     {meeting.scheduleDate && <div className="text-xs text-slate-500 mt-1">{meeting.scheduleDate} · {meeting.scheduleTime} · {meeting.scheduleLocation}</div>}
-                    {(meeting.visitorId || meeting.meetingDocket) && <div className="text-xs text-slate-400 mt-1">Visitor ID: {meeting.visitorId || "Pending"} · Docket: {meeting.meetingDocket || "Pending"}</div>}
+                    {(meeting.visitorId || meeting.meetingDocket) && <div className="text-xs text-slate-400 mt-1">Visitor ID: {meeting.visitorId || "Pending"} · Docket: {meeting.meetingDocket || "Pending"} · {meeting.priority === "VIP" || meeting.priority === "HIGH" ? "VIP Meeting" : "Standard Meeting"}</div>}
                   </div>
                   <span className="inline-block px-2 py-0.5 rounded-full text-[0.7rem] font-bold bg-emerald-100 text-emerald-700">{meeting.statusLabel}</span>
                 </div>
@@ -462,16 +473,81 @@ export default function MeetingsPage() {
   return (
     <div className="p-6 max-w-[1240px] mx-auto space-y-5">
       <div>
-        <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-1">Calendar & Engagement</h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl">Create invited events or scheduled office meetings, attach media references, and feed attended events into classification and productivity scoring.</p>
+        <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-1">
+          {location.pathname === "/verification-requests" ? "Verification Requests" : "Calendar & Engagement"}
+        </h1>
+        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl">
+          {location.pathname === "/verification-requests"
+            ? "Handle citizen verification requests raised by admins. Once updated here, the request goes back to the admin queue."
+            : "Create invited events or scheduled office meetings, attach media references, and feed attended events into classification and productivity scoring."}
+        </p>
       </div>
       {error && <div className="px-3 py-2 rounded-lg text-xs bg-red-50 text-red-600 border border-red-100">{error}</div>}
 
+      <div className="portal-card">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <div className="portal-page__eyebrow">DEO Desk</div>
+            <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>Verification Requests</h2>
+          </div>
+          <span className="portal-chip">{verificationRequests.length} open</span>
+        </div>
+        {!verificationRequests.length ? (
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No verification requests are waiting with DEO.</p>
+        ) : (
+          <div className="space-y-3">
+            {verificationRequests.map((request) => (
+              <div key={request._id} className="portal-card portal-card--soft">
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="portal-chip">{request.requestId}</span>
+                      {(request.priority === "VIP" || request.priority === "HIGH") && <span className="portal-chip">VIP Meeting</span>}
+                    </div>
+                    <div className="font-semibold" style={{ color: "var(--text-primary)" }}>{request.purpose}</div>
+                    <div className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                      {request.citizenSnapshot?.name || "Citizen"} · {request.citizenSnapshot?.citizenId || "Citizen ID unavailable"} · {request.citizenSnapshot?.phoneNumbers?.[0] || "Phone unavailable"}
+                    </div>
+                    <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>{request.adminNotes || "Admin has requested a verification call."}</div>
+                  </div>
+                  <div className="w-full md:w-[420px] space-y-3">
+                    <textarea
+                      value={verificationNotes[request._id] || ""}
+                      onChange={(event) => setVerificationNotes((current) => ({ ...current, [request._id]: event.target.value }))}
+                      rows={3}
+                      className="portal-textarea"
+                      placeholder="Log verification outcome after speaking with the citizen"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await meetingsApi.logVerificationOutcome(request._id, verificationNotes[request._id] || "");
+                          setVerificationRequests((current) => current.filter((item) => item._id !== request._id));
+                          setMeetings((current) => current.map((item) => (item._id === request._id ? res.meetingRequest : item)));
+                        } catch (err) {
+                          setError(err.message || "Failed to update verification");
+                        }
+                      }}
+                      className="portal-btn"
+                    >
+                      Save Verification Log
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {location.pathname !== "/verification-requests" && (
       <form onSubmit={createEvent} className="bg-white rounded-2xl border border-slate-100 shadow-3d p-4 grid md:grid-cols-2 gap-3">
         <input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="Event title" className={inputClass} />
         <select value={form.eventType} onChange={(event) => setForm((current) => ({ ...current, eventType: event.target.value }))} className={inputClass}>
           <option>Invited Event</option>
           <option>Scheduled Meeting</option>
+          <option>VIP Meeting</option>
         </select>
         <textarea value={form.details} onChange={(event) => setForm((current) => ({ ...current, details: event.target.value }))} placeholder="Event details" className={`${inputClass} md:col-span-2 min-h-28`} />
         <input type="datetime-local" value={form.scheduleAt} onChange={(event) => setForm((current) => ({ ...current, scheduleAt: event.target.value }))} className={inputClass} />
@@ -494,8 +570,9 @@ export default function MeetingsPage() {
         <input type="file" multiple onChange={(event) => setDocuments(Array.from(event.target.files || []))} className={`${inputClass} md:col-span-2`} />
         <button type="submit" className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold text-sm md:col-span-2">Create Calendar Entry</button>
       </form>
+      )}
 
-      {loading ? (
+      {location.pathname !== "/verification-requests" && (loading ? (
         <div className="text-sm text-slate-500 py-8 text-center">Loading calendar…</div>
       ) : (
         <div className="space-y-3">
@@ -521,7 +598,7 @@ export default function MeetingsPage() {
             </div>
           ))}
         </div>
-      )}
+      ))}
     </div>
   );
 }

@@ -51,9 +51,9 @@ function MinisterDashboard() {
           ["Verification Backlog", operations?.verificationBacklog || 0],
           ["Scheduled Meetings", operations?.meetingOutcomes?.scheduled || 0],
           ["Completed Meetings", operations?.meetingOutcomes?.completed || 0],
-          ["No-Show Meetings", operations?.meetingOutcomes?.noShow || 0],
+          ["Cancelled Meetings", operations?.meetingOutcomes?.cancelled || 0],
           ["SLA Breaches", operations?.complaintSlaBreaches || 0],
-          ["High Priority", (operations?.priorityBreakdown || []).find((item) => item.priority === "HIGH")?.count || 0],
+          ["VIP Meetings", (operations?.priorityBreakdown || []).find((item) => item.priority === "VIP")?.count || 0],
         ].map(([label, value]) => (
           <ChartCard key={label} title={label}>
             <div className="text-3xl font-black text-slate-900 dark:text-slate-100">{value}</div>

@@ -43,7 +43,9 @@ const Header = ({ onOpenMobileNav }) => {
         : location.pathname.startsWith("/new-case")
           ? "Citizen Services"
           : location.pathname.startsWith("/my-cases")
-            ? "My Requests"
+            ? "Complaints"
+            : location.pathname.startsWith("/verification-requests")
+              ? "Verification Requests"
             : "Portal";
 
   const toggleFullscreen = () => {

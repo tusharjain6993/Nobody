@@ -6,6 +6,7 @@ const DB_SCHEMA_VERSION = "13";
 const DB_SEED_PACK_KEY = "hcm_demo_seed_pack";
 const DB_SNAPSHOT_INDEX_KEY = "hcm_demo_snapshot_index";
 const DB_SNAPSHOT_PREFIX = "hcm_demo_snapshot_";
+const MAX_PERSIST_BYTES = 4.5 * 1024 * 1024;
 
 let db = null;
 let dbPromise = null;
@@ -35,7 +36,11 @@ function serializeDb() {
 
 function persistDb() {
   if (!db) return;
-  localStorage.setItem(DB_STORAGE_KEY, serializeDb());
+  const snapshot = serializeDb();
+  if (snapshot.length > MAX_PERSIST_BYTES) {
+    throw new Error("Local demo storage is full. Remove large attachments or reset/import a smaller dataset.");
+  }
+  localStorage.setItem(DB_STORAGE_KEY, snapshot);
   localStorage.setItem(DB_SCHEMA_VERSION_KEY, DB_SCHEMA_VERSION);
 }
 

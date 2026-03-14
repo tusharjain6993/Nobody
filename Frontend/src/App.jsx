@@ -103,6 +103,14 @@ function App() {
             )}
           />
           <Route
+            path="/verification-requests"
+            element={(
+              <ProtectedRoute allowedRoles={["deo"]}>
+                <MeetingsPage />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
             path="/meetings/:meetingId"
             element={(
               <ProtectedRoute allowedRoles={["admin", "deo", "citizen"]}>
