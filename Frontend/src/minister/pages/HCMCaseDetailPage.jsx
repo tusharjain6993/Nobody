@@ -277,86 +277,6 @@ export default function HCMCaseDetailPage() {
 
       {error && <div className="portal-alert portal-alert--error">{error}</div>}
 
-      <Section title="Case Record">
-        <div className="portal-page__eyebrow" style={{ marginBottom: "0.9rem" }}>{itemType === "meeting" ? "Meeting Workflow" : "Complaint Workflow"}</div>
-        <div className="portal-grid portal-grid--4">
-          <div className="portal-card portal-card--soft">
-            <div className="portal-stat__label">Case</div>
-            <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>{itemType === "meeting" ? item.requestId : item.complaintId}</div>
-            <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{itemType === "meeting" ? item.purpose : item.title}</div>
-          </div>
-          <div className="portal-card portal-card--soft">
-            <div className="portal-stat__label">Current Owner</div>
-            <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>{item.currentOwner}</div>
-            <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>Status reason: {item.statusReason || "No explicit reason captured."}</div>
-          </div>
-          <div className="portal-card portal-card--soft">
-            <div className="portal-stat__label">Citizen</div>
-            <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>{item.citizenSnapshot?.name}</div>
-            <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{item.citizenSnapshot?.citizenId || "Citizen ID unavailable"}</div>
-            <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{item.citizenSnapshot?.phoneNumbers?.[0] || "Phone unavailable"}</div>
-          </div>
-          <div className="portal-card portal-card--soft">
-            <div className="portal-stat__label">{itemType === "meeting" ? "Meeting Setup" : "Complaint Routing"}</div>
-            <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>
-              {itemType === "meeting"
-                ? (item.priority === "VIP" || item.priority === "HIGH" ? "VIP Meeting" : "Standard Meeting")
-                : (item.department || "Pending")}
-            </div>
-            <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-              {itemType === "meeting"
-                ? (item.scheduleDate ? `${item.scheduleDate} ${item.scheduleTime || ""}` : "Date and time pending")
-                : (item.officerName || item.manualContact || "Officer not selected")}
-            </div>
-          </div>
-        </div>
-      </Section>
-
-      <Section title="Related Records">
-        <div className="portal-grid portal-grid--3">
-          <div className="portal-card portal-card--soft">
-            <div className="portal-stat__label">Linked Complaint</div>
-            {item.relatedComplaint ? (
-              <>
-                <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>{item.relatedComplaint.complaintId}</div>
-                <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{item.relatedComplaint.title}</div>
-                <button type="button" onClick={() => navigate(`/cases/complaint/${item.relatedComplaint.id}`)} className="portal-link-btn mt-2">Open complaint</button>
-              </>
-            ) : (
-              <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>No linked complaint.</div>
-            )}
-          </div>
-          <div className="portal-card portal-card--soft">
-            <div className="portal-stat__label">Linked Meeting</div>
-            {item.relatedMeeting ? (
-              <>
-                <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>{item.relatedMeeting.requestId}</div>
-                <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{item.relatedMeeting.purpose}</div>
-                <button type="button" onClick={() => navigate(`/cases/meeting/${item.relatedMeeting.id}`)} className="portal-link-btn mt-2">Open meeting</button>
-              </>
-            ) : (
-              <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>No linked meeting.</div>
-            )}
-          </div>
-          <div className="portal-card portal-card--soft">
-            <div className="portal-stat__label">Notifications</div>
-            {(item.relatedNotifications || []).length ? (
-              <div className="space-y-2 mt-2">
-                {item.relatedNotifications.slice(0, 3).map((note) => (
-                  <div key={note._id} className="text-xs" style={{ color: "var(--text-secondary)" }}>{note.type}: {note.message}</div>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>No linked notifications.</div>
-            )}
-          </div>
-        </div>
-      </Section>
-
-      <Section title="Master Timeline">
-        <Timeline items={item.masterTimeline || []} />
-      </Section>
-
       <Section title="Workflow Actions">
         <div className="grid md:grid-cols-[minmax(0,320px)_auto] gap-3 items-start mb-4">
           <select
@@ -498,6 +418,86 @@ export default function HCMCaseDetailPage() {
             <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.reopenComplaint(id, complaintForm.reopenReason), { stayOnPage: false, successAction: "reopen" })} className="portal-btn">Reopen Complaint</button>
           </div>
         )}
+      </Section>
+
+      <Section title="Case Record">
+        <div className="portal-page__eyebrow" style={{ marginBottom: "0.9rem" }}>{itemType === "meeting" ? "Meeting Workflow" : "Complaint Workflow"}</div>
+        <div className="portal-grid portal-grid--4">
+          <div className="portal-card portal-card--soft">
+            <div className="portal-stat__label">Case</div>
+            <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>{itemType === "meeting" ? item.requestId : item.complaintId}</div>
+            <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{itemType === "meeting" ? item.purpose : item.title}</div>
+          </div>
+          <div className="portal-card portal-card--soft">
+            <div className="portal-stat__label">Current Owner</div>
+            <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>{item.currentOwner}</div>
+            <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>Status reason: {item.statusReason || "No explicit reason captured."}</div>
+          </div>
+          <div className="portal-card portal-card--soft">
+            <div className="portal-stat__label">Citizen</div>
+            <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>{item.citizenSnapshot?.name}</div>
+            <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{item.citizenSnapshot?.citizenId || "Citizen ID unavailable"}</div>
+            <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{item.citizenSnapshot?.phoneNumbers?.[0] || "Phone unavailable"}</div>
+          </div>
+          <div className="portal-card portal-card--soft">
+            <div className="portal-stat__label">{itemType === "meeting" ? "Meeting Setup" : "Complaint Routing"}</div>
+            <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>
+              {itemType === "meeting"
+                ? (item.priority === "VIP" || item.priority === "HIGH" ? "VIP Meeting" : "Standard Meeting")
+                : (item.department || "Pending")}
+            </div>
+            <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+              {itemType === "meeting"
+                ? (item.scheduleDate ? `${item.scheduleDate} ${item.scheduleTime || ""}` : "Date and time pending")
+                : (item.officerName || item.manualContact || "Officer not selected")}
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Related Records">
+        <div className="portal-grid portal-grid--3">
+          <div className="portal-card portal-card--soft">
+            <div className="portal-stat__label">Linked Complaint</div>
+            {item.relatedComplaint ? (
+              <>
+                <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>{item.relatedComplaint.complaintId}</div>
+                <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{item.relatedComplaint.title}</div>
+                <button type="button" onClick={() => navigate(`/cases/complaint/${item.relatedComplaint.id}`)} className="portal-link-btn mt-2">Open complaint</button>
+              </>
+            ) : (
+              <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>No linked complaint.</div>
+            )}
+          </div>
+          <div className="portal-card portal-card--soft">
+            <div className="portal-stat__label">Linked Meeting</div>
+            {item.relatedMeeting ? (
+              <>
+                <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>{item.relatedMeeting.requestId}</div>
+                <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{item.relatedMeeting.purpose}</div>
+                <button type="button" onClick={() => navigate(`/cases/meeting/${item.relatedMeeting.id}`)} className="portal-link-btn mt-2">Open meeting</button>
+              </>
+            ) : (
+              <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>No linked meeting.</div>
+            )}
+          </div>
+          <div className="portal-card portal-card--soft">
+            <div className="portal-stat__label">Notifications</div>
+            {(item.relatedNotifications || []).length ? (
+              <div className="space-y-2 mt-2">
+                {item.relatedNotifications.slice(0, 3).map((note) => (
+                  <div key={note._id} className="text-xs" style={{ color: "var(--text-secondary)" }}>{note.type}: {note.message}</div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>No linked notifications.</div>
+            )}
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Master Timeline">
+        <Timeline items={item.masterTimeline || []} />
       </Section>
     </div>
   );
