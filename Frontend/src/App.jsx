@@ -17,6 +17,7 @@ import MeetingsPage from "./minister/pages/MeetingsPage";
 import MinisterDashboardPage from "./minister/pages/MinisterDashboardPage";
 import MinisterCalendarPage from "./minister/pages/MinisterCalendarPage";
 import AdminCalendarPage from "./minister/pages/AdminCalendarPage";
+import MeetingPassVerifyPage from "./minister/pages/MeetingPassVerifyPage";
 
 function App() {
   const { isAuthenticated, user } = useHCMAuth();
@@ -34,6 +35,7 @@ function App() {
   return (
     <NotificationProvider>
       <Routes>
+        <Route path="/meeting-pass/:token" element={<MeetingPassVerifyPage />} />
         <Route path="/login" element={isAuthenticated ? <Navigate to={defaultRoute} replace /> : <HCMLoginPage />} />
         <Route path="/register" element={isAuthenticated ? <Navigate to={defaultRoute} replace /> : <HCMRegisterPage />} />
 
@@ -94,6 +96,14 @@ function App() {
           />
           <Route
             path="/meetings"
+            element={(
+              <ProtectedRoute allowedRoles={["admin", "deo", "citizen"]}>
+                <MeetingsPage />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/meetings/:meetingId"
             element={(
               <ProtectedRoute allowedRoles={["admin", "deo", "citizen"]}>
                 <MeetingsPage />

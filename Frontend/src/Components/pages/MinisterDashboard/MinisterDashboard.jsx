@@ -31,6 +31,7 @@ function MinisterDashboard() {
   }, []);
 
   const analytics = stats?.analytics;
+  const operations = stats?.operations;
 
   return (
     <div className="p-6 h-full space-y-6 bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
@@ -44,6 +45,21 @@ function MinisterDashboard() {
       </div>
 
       <ProjectTaskCards stats={stats} />
+
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        {[
+          ["Verification Backlog", operations?.verificationBacklog || 0],
+          ["Scheduled Meetings", operations?.meetingOutcomes?.scheduled || 0],
+          ["Completed Meetings", operations?.meetingOutcomes?.completed || 0],
+          ["No-Show Meetings", operations?.meetingOutcomes?.noShow || 0],
+          ["SLA Breaches", operations?.complaintSlaBreaches || 0],
+          ["High Priority", (operations?.priorityBreakdown || []).find((item) => item.priority === "HIGH")?.count || 0],
+        ].map(([label, value]) => (
+          <ChartCard key={label} title={label}>
+            <div className="text-3xl font-black text-slate-900 dark:text-slate-100">{value}</div>
+          </ChartCard>
+        ))}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <ChartCard title="Meeting Density by Day">
@@ -118,6 +134,35 @@ function MinisterDashboard() {
           </div>
           <div className="mt-2 text-xs text-slate-500">
             Portfolio Utilisation: Culture {analytics?.portfolioUtilisation?.culture || 0}% / Tourism {analytics?.portfolioUtilisation?.tourism || 0}%
+          </div>
+        </ChartCard>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <ChartCard title="Pending Age Buckets">
+          <div className="space-y-2 text-sm">
+            {[
+              ["Under 3 days", operations?.pendingAgeBuckets?.under3 || 0],
+              ["3-7 days", operations?.pendingAgeBuckets?.day3to7 || 0],
+              ["8-14 days", operations?.pendingAgeBuckets?.day8to14 || 0],
+              ["Over 14 days", operations?.pendingAgeBuckets?.over14 || 0],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-400">{label}</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100">{value}</span>
+              </div>
+            ))}
+          </div>
+        </ChartCard>
+
+        <ChartCard title="Admin Workload Distribution">
+          <div className="space-y-2 text-sm">
+            {(operations?.adminWorkloadDistribution || []).map((item) => (
+              <div key={item.id} className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-400">{item.admin}</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100">{item.total}</span>
+              </div>
+            ))}
           </div>
         </ChartCard>
       </div>

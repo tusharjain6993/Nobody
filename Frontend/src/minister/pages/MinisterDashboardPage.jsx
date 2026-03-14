@@ -27,6 +27,7 @@ export default function MinisterDashboardPage() {
   }, []);
 
   const analytics = data?.analytics;
+  const operations = data?.operations;
 
   return (
     <div className="portal-page">
@@ -43,6 +44,13 @@ export default function MinisterDashboardPage() {
         <Card label="Total Events" value={data?.totalEvents || 0} sub="DEO-managed minister engagements" />
         <Card label="Attended Events" value={data?.attendedEvents || 0} sub="Events already marked attended by DEO" />
         <Card label="Invited Events" value={data?.invitedEvents || 0} sub="Incoming invited engagements" />
+      </div>
+
+      <div className="portal-grid portal-grid--4">
+        <Card label="High Priority Queue" value={(operations?.priorityBreakdown || []).find((item) => item.priority === "HIGH")?.count || 0} sub="Meetings marked high with mandatory reason" />
+        <Card label="Verification Backlog" value={operations?.verificationBacklog || 0} sub="Requests still moving through verification and review" />
+        <Card label="Completed Meetings" value={operations?.meetingOutcomes?.completed || 0} sub="Citizen meetings marked complete" />
+        <Card label="No-Show Meetings" value={operations?.meetingOutcomes?.noShow || 0} sub="Scheduled citizen meetings that ended as no-show" />
       </div>
 
       <div className="portal-grid portal-grid--2">

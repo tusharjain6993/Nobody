@@ -116,10 +116,10 @@ export default function PendencyMonitorPage() {
     <div className="p-6 max-w-[1200px] mx-auto">
       <button
         type="button"
-        onClick={() => navigate(-1)}
+        onClick={() => navigate("/dashboard")}
         className="mb-3 text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer bg-transparent border-0 p-0"
       >
-        ← Back
+        ← Back to Dashboard
       </button>
 
       <div className="mb-4">
@@ -258,4 +258,3 @@ export default function PendencyMonitorPage() {
     </div>
   );
 }
-

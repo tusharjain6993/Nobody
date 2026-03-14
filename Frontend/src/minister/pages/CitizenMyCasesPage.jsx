@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { citizenApi } from "../ministerApi";
 
 function Card({ title, subtitle, status, children }) {
@@ -17,9 +18,12 @@ function Card({ title, subtitle, status, children }) {
 }
 
 export default function CitizenMyCasesPage() {
+  const navigate = useNavigate();
   const [data, setData] = useState({ meetings: [], complaints: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [tab, setTab] = useState("all");
+  const [filters, setFilters] = useState({ q: "", status: "all", type: "all" });
 
   useEffect(() => {
     let mounted = true;
@@ -30,6 +34,51 @@ export default function CitizenMyCasesPage() {
     return () => { mounted = false; };
   }, []);
 
+  useEffect(() => {
+    setFilters((current) => ({
+      ...current,
+      status: "all",
+      type: tab === "all" ? "all" : tab,
+    }));
+  }, [tab]);
+
+  const items = useMemo(() => {
+    const combined = [
+      ...data.meetings.map((item) => ({ ...item, itemType: "meeting", primaryTitle: item.purpose, primaryId: item.requestId })),
+      ...data.complaints.map((item) => ({ ...item, itemType: "complaint", primaryTitle: item.title, primaryId: item.complaintId })),
+    ].sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+
+    return combined.filter((item) => {
+      const tabOk = tab === "all" || item.itemType === tab;
+      const typeOk = filters.type === "all" || item.itemType === filters.type;
+      const statusOk = filters.status === "all" || item.status === filters.status;
+      const q = filters.q.trim().toLowerCase();
+      const searchText = [
+        item.primaryTitle,
+        item.primaryId,
+        item.statusLabel,
+        item.status,
+        item.currentOwner,
+        item.nextAction,
+        item.department,
+        item.relatedMeeting?.requestId,
+        item.relatedComplaint?.complaintId,
+        item.scheduleLocation,
+        item.rejectReason,
+        item.verificationOutcome,
+        item.resolutionSummary,
+        item.visitorId,
+        item.meetingDocket,
+      ].filter(Boolean).join(" ").toLowerCase();
+      return tabOk && typeOk && statusOk && (!q || searchText.includes(q));
+    });
+  }, [data.complaints, data.meetings, filters, tab]);
+
+  const statusOptions = useMemo(() => Array.from(new Set([
+    ...data.meetings.map((item) => item.status),
+    ...data.complaints.map((item) => item.status),
+  ])).sort(), [data.complaints, data.meetings]);
+
   return (
     <div className="portal-page">
       <div className="portal-page__hero">
@@ -38,45 +87,74 @@ export default function CitizenMyCasesPage() {
         <p className="portal-page__desc">Track meeting requests, complaints, schedules, escalation results, and resolution documents.</p>
       </div>
 
+      <div className="portal-tabs">
+        {[
+          ["all", `All (${data.meetings.length + data.complaints.length})`],
+          ["meeting", `Meetings (${data.meetings.length})`],
+          ["complaint", `Complaints (${data.complaints.length})`],
+        ].map(([value, label]) => (
+          <button key={value} type="button" onClick={() => setTab(value)} className={`portal-tab ${tab === value ? "portal-tab--active" : ""}`}>{label}</button>
+        ))}
+      </div>
+
+      <div className="portal-card">
+        <div className="grid md:grid-cols-3 gap-3">
+          <input value={filters.q} onChange={(event) => setFilters((current) => ({ ...current, q: event.target.value }))} placeholder="Search ID, title, status, owner..." className="portal-input" />
+          <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))} className="portal-input">
+            <option value="all">All statuses</option>
+            {statusOptions.map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}
+          </select>
+          <select value={filters.type} onChange={(event) => setFilters((current) => ({ ...current, type: event.target.value }))} className="portal-input">
+            <option value="all">All record types</option>
+            <option value="meeting">Meetings</option>
+            <option value="complaint">Complaints</option>
+          </select>
+        </div>
+      </div>
+
       {loading && <div className="portal-card portal-empty">Loading your requests...</div>}
       {error && <div className="portal-alert portal-alert--error">{error}</div>}
 
       {!loading && !error && (
         <div className="portal-list">
-          {data.meetings.map((meeting) => (
-            <Card key={`meeting-${meeting._id}`} title={meeting.purpose} subtitle={meeting.requestId} status={meeting.statusLabel}>
+          {items.map((item) => item.itemType === "meeting" ? (
+            <Card key={`meeting-${item._id}`} title={item.purpose} subtitle={item.requestId} status={item.statusLabel}>
               <div style={{ color: "var(--text-secondary)", fontSize: "0.92rem", lineHeight: 1.6 }}>
-                Referred to: {meeting.referralAdminName}
-                {meeting.scheduleDate && (
+                Referred to: {item.referralAdminName}
+                <div style={{ marginTop: "0.35rem" }}>Current owner: {item.currentOwner}</div>
+                <div style={{ marginTop: "0.35rem" }}>Next action: {item.nextAction}</div>
+                {item.scheduleDate && (
                   <div style={{ marginTop: "0.55rem" }}>
-                    Schedule: {meeting.scheduleDate} · {meeting.scheduleTime} · {meeting.scheduleLocation}
+                    Schedule: {item.scheduleDate} · {item.scheduleTime} · {item.scheduleLocation}
                   </div>
                 )}
-                {meeting.visitorId && <div style={{ marginTop: "0.35rem" }}>Visitor ID: {meeting.visitorId}</div>}
-                {meeting.meetingDocket && <div style={{ marginTop: "0.35rem" }}>Meeting Docket: {meeting.meetingDocket}</div>}
-                {meeting.rejectReason && <div style={{ marginTop: "0.35rem", color: "var(--accent-danger)" }}>Reject reason: {meeting.rejectReason}</div>}
-                {meeting.verificationOutcome && <div style={{ marginTop: "0.35rem" }}>Verification call outcome: {meeting.verificationOutcome}</div>}
+                {item.visitorId && <div style={{ marginTop: "0.35rem" }}>Visitor ID: {item.visitorId}</div>}
+                {item.meetingDocket && <div style={{ marginTop: "0.35rem" }}>Meeting Docket: {item.meetingDocket}</div>}
+                {item.rejectReason && <div style={{ marginTop: "0.35rem", color: "var(--accent-danger)" }}>Reject reason: {item.rejectReason}</div>}
+                {item.verificationOutcome && <div style={{ marginTop: "0.35rem" }}>Verification call outcome: {item.verificationOutcome}</div>}
+                {item.relatedComplaint && <div style={{ marginTop: "0.35rem" }}>Linked complaint: {item.relatedComplaint.complaintId}</div>}
+                <button type="button" onClick={() => navigate(`/meetings/${item._id}`)} className="portal-btn-secondary" style={{ marginTop: "0.85rem" }}>Open full meeting record</button>
               </div>
             </Card>
-          ))}
-
-          {data.complaints.map((complaint) => (
-            <Card key={`complaint-${complaint._id}`} title={complaint.title} subtitle={complaint.complaintId} status={complaint.statusLabel}>
+          ) : (
+            <Card key={`complaint-${item._id}`} title={item.title} subtitle={item.complaintId} status={item.statusLabel}>
               <div style={{ color: "var(--text-secondary)", fontSize: "0.92rem", lineHeight: 1.6 }}>
-                {complaint.details}
-                {complaint.department && <div style={{ marginTop: "0.55rem" }}>Department: {complaint.department}</div>}
-                {complaint.callOutcome && <div style={{ marginTop: "0.35rem" }}>Call outcome: {complaint.callOutcome}</div>}
-                {complaint.resolutionSummary && <div style={{ marginTop: "0.35rem" }}>Resolution summary: {complaint.resolutionSummary}</div>}
-                {complaint.resolutionDocs?.length > 0 && <div style={{ marginTop: "0.35rem" }}>Resolution documents: {complaint.resolutionDocs.map((doc) => doc.name).join(", ")}</div>}
-                {complaint.status === "completed" && <div style={{ marginTop: "0.35rem", color: "var(--accent-success)", fontWeight: 700 }}>Case closed after resolution.</div>}
-                {complaint.escalatedMeetingRequestId && <div style={{ marginTop: "0.35rem" }}>Escalated to admin meeting flow.</div>}
+                {item.details}
+                <div style={{ marginTop: "0.35rem" }}>Current owner: {item.currentOwner}</div>
+                <div style={{ marginTop: "0.35rem" }}>Next action: {item.nextAction}</div>
+                {item.department && <div style={{ marginTop: "0.55rem" }}>Department: {item.department}</div>}
+                {item.callOutcome && <div style={{ marginTop: "0.35rem" }}>Call outcome: {item.callOutcome}</div>}
+                {item.resolutionSummary && <div style={{ marginTop: "0.35rem" }}>Resolution summary: {item.resolutionSummary}</div>}
+                {item.resolutionDocs?.length > 0 && <div style={{ marginTop: "0.35rem" }}>Resolution documents: {item.resolutionDocs.map((doc) => doc.name).join(", ")}</div>}
+                {item.status === "completed" && <div style={{ marginTop: "0.35rem", color: "var(--accent-success)", fontWeight: 700 }}>Case closed after resolution.</div>}
+                {item.relatedMeeting && <div style={{ marginTop: "0.35rem" }}>Escalated meeting: {item.relatedMeeting.requestId}</div>}
               </div>
             </Card>
           ))}
 
-          {data.meetings.length === 0 && data.complaints.length === 0 && (
+          {items.length === 0 && (
             <div className="portal-card portal-empty" style={{ color: "var(--text-secondary)" }}>
-              No requests submitted yet.
+              No requests found for the current filters.
             </div>
           )}
         </div>

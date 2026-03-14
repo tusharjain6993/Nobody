@@ -27,7 +27,7 @@ export default function HCMLoginPage() {
       const data = loginAs === "citizen"
         ? await authApi.loginByCitizenId(citizenId)
         : await authApi.login(email, password);
-      login(data.user, data.token);
+      login(data.user, data.token, data.sessionExpiresAt);
       navigate(
         data.user.role === "admin"
           ? "/dashboard"
@@ -49,7 +49,10 @@ export default function HCMLoginPage() {
     setRecoveredCitizenId("");
     try {
       const res = await authApi.recoverCitizenId({ aadhaar: recoveryAadhaar, phone: recoveryPhone });
-      setRecoveredCitizenId(`${res.name}: ${res.citizenId}`);
+      const completion = res.profileCompletion?.isComplete
+        ? "Profile complete"
+        : `Profile incomplete (${res.profileCompletion?.percent || 0}%)`;
+      setRecoveredCitizenId(`${res.name}: ${res.citizenId} · ${completion}`);
     } catch (err) {
       setError(err.message || "Unable to recover Citizen ID");
     }
@@ -73,7 +76,7 @@ export default function HCMLoginPage() {
             <span style={{ fontSize: "1.75rem" }}>🏛️</span>
           </div>
           <h1 className="auth-title">HCM Portal</h1>
-          <p className="auth-subtitle">Citizen, admin, and DEO demo access</p>
+          <p className="auth-subtitle">Citizen, admin, and DEO demo access with session expiry and account lockout simulation</p>
         </div>
 
         <div className="auth-login-type">
@@ -102,6 +105,7 @@ export default function HCMLoginPage() {
               <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.8rem" }}>
                 <button type="button" onClick={() => { setCitizenId("CTZ-HP-000001"); setError(""); }} className="auth-demo-btn">Use citizen demo</button>
               </div>
+              <p className="auth-subtitle" style={{ marginTop: "0.75rem", fontSize: "0.78rem" }}>Citizen sessions expire after 4 hours. Five failed attempts lock the account for 15 minutes.</p>
             </>
           ) : (
             <>

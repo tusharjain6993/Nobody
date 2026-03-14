@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useHCMAuth } from "../HCMAuthContext";
 import { calendarApi, meetingsApi } from "../ministerApi";
 import { filesToDocuments } from "../../utils/fileHelpers";
+import { downloadMeetingPassPdf } from "../../utils/meetingPass";
+import { downloadCaseSummaryPdf } from "../../utils/caseSummary";
 
 const inputClass = "text-[0.78rem] px-2.5 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none";
 
@@ -16,11 +19,12 @@ function statusBadgeClass(status) {
 
 export default function MeetingsPage() {
   const { user } = useHCMAuth();
+  const navigate = useNavigate();
+  const { meetingId = "" } = useParams();
   const [events, setEvents] = useState([]);
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedMeetingId, setSelectedMeetingId] = useState("");
   const [form, setForm] = useState({
     title: "",
     details: "",
@@ -64,7 +68,188 @@ export default function MeetingsPage() {
       const rightDate = new Date(right.updatedAt || right.createdAt || 0).getTime();
       return rightDate - leftDate;
     });
-    const selectedMeeting = citizenMeetings.find((meeting) => String(meeting._id) === String(selectedMeetingId)) || citizenMeetings[0] || null;
+    const selectedMeeting = meetingId
+      ? citizenMeetings.find((meeting) => String(meeting._id) === String(meetingId)) || null
+      : null;
+
+    if (meetingId) {
+      return (
+        <div className="portal-page">
+          <div className="portal-toolbar">
+            <button type="button" onClick={() => navigate("/meetings")} className="portal-link-btn">← Back to My Meetings</button>
+          </div>
+
+          {loading ? (
+            <div className="portal-card portal-empty">Loading meeting details…</div>
+          ) : error ? (
+            <div className="portal-alert portal-alert--error">{error}</div>
+          ) : !selectedMeeting ? (
+            <div className="portal-card portal-empty">Meeting request not found.</div>
+          ) : (
+            <div className="portal-card space-y-5">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                <div>
+                  <div className="portal-page__eyebrow">{selectedMeeting.requestId}</div>
+                  <h1 className="text-2xl font-bold mt-2" style={{ color: "var(--text-primary)" }}>{selectedMeeting.purpose}</h1>
+                  <p className="text-sm mt-2" style={{ color: "var(--text-secondary)" }}>
+                    This page shows the latest admin processing for your meeting request and gives you the meeting pass once scheduled.
+                  </p>
+                </div>
+                <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${statusBadgeClass(selectedMeeting.status)}`}>
+                  {selectedMeeting.statusLabel}
+                </span>
+              </div>
+
+              <div className="portal-grid portal-grid--3">
+                <div className="portal-card portal-card--soft">
+                  <div className="portal-stat__label">Admin Desk</div>
+                  <div className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {selectedMeeting.assignedAdminName || selectedMeeting.referralAdminName || "General Admin Pool"}
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+                    Referral: {selectedMeeting.referralAdminName || "Not specified"}
+                  </div>
+                </div>
+                <div className="portal-card portal-card--soft">
+                  <div className="portal-stat__label">Meeting Schedule</div>
+                  <div className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {selectedMeeting.scheduleDate ? `${selectedMeeting.scheduleDate} ${selectedMeeting.scheduleTime || ""}` : "Pending admin scheduling"}
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+                    {selectedMeeting.scheduleLocation || "Location not set yet"}
+                  </div>
+                </div>
+                <div className="portal-card portal-card--soft">
+                  <div className="portal-stat__label">Meeting Access</div>
+                  <div className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    Visitor ID: {selectedMeeting.visitorId || "Pending"}
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+                    Docket: {selectedMeeting.meetingDocket || "Pending"} · Priority: {selectedMeeting.priority || "MEDIUM"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="portal-grid portal-grid--3">
+                <div className="portal-card portal-card--soft">
+                  <div className="portal-stat__label">Current Owner</div>
+                  <div className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{selectedMeeting.currentOwner}</div>
+                </div>
+                <div className="portal-card portal-card--soft">
+                  <div className="portal-stat__label">Next Action</div>
+                  <div className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{selectedMeeting.nextAction}</div>
+                </div>
+                <div className="portal-card portal-card--soft">
+                  <div className="portal-stat__label">Linked Complaint</div>
+                  <div className="mt-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {selectedMeeting.relatedComplaint?.complaintId || "No linked complaint"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="portal-grid portal-grid--2">
+                <div className="portal-card">
+                  <div className="portal-stat__label">Admin Notes</div>
+                  <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+                    {selectedMeeting.adminNotes || "No admin notes added yet."}
+                  </div>
+                </div>
+                <div className="portal-card">
+                  <div className="portal-stat__label">Verification Update</div>
+                  <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+                    {selectedMeeting.verificationOutcome || (selectedMeeting.status === "verification_needed" ? "Verification call pending." : "No verification note yet.")}
+                  </div>
+                </div>
+              </div>
+
+              {selectedMeeting.rejectReason && (
+                <div className="portal-alert portal-alert--error">
+                  Rejection Note: {selectedMeeting.rejectReason}
+                </div>
+              )}
+
+              <div className="portal-card">
+                <div className="portal-stat__label">Meeting Pass PDF</div>
+                <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+                  {selectedMeeting.status === "scheduled"
+                    ? "This meeting is scheduled. Download the PDF pass containing the meeting details and QR verification code."
+                    : "The PDF pass becomes available after the admin schedules the meeting."}
+                </div>
+                <button
+                  type="button"
+                  disabled={selectedMeeting.status !== "scheduled"}
+                  onClick={() => downloadMeetingPassPdf(selectedMeeting)}
+                  className={`mt-4 ${selectedMeeting.status === "scheduled" ? "portal-btn" : "portal-btn-secondary opacity-60 cursor-not-allowed"}`}
+                >
+                  Download Meeting Pass PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadCaseSummaryPdf({
+                    filename: `${selectedMeeting.requestId}-summary.pdf`,
+                    title: `${selectedMeeting.requestId} Summary`,
+                    rows: [
+                      ["Request ID", selectedMeeting.requestId],
+                      ["Citizen", selectedMeeting.citizenSnapshot?.name],
+                      ["Status", selectedMeeting.statusLabel],
+                      ["Owner", selectedMeeting.currentOwner],
+                      ["Next action", selectedMeeting.nextAction],
+                      ["Priority", selectedMeeting.priority || "MEDIUM"],
+                      ["Priority reason", selectedMeeting.priorityReason || ""],
+                      ["Schedule", selectedMeeting.scheduleDate ? `${selectedMeeting.scheduleDate} ${selectedMeeting.scheduleTime || ""}` : "Pending"],
+                      ["Location", selectedMeeting.scheduleLocation || ""],
+                    ],
+                    timeline: selectedMeeting.masterTimeline || [],
+                  })}
+                  className="mt-4 ml-3 portal-btn-secondary"
+                >
+                  Download Case Summary
+                </button>
+              </div>
+
+              <div className="portal-card">
+                <div className="portal-stat__label">Master Timeline</div>
+                <div className="space-y-3 mt-3">
+                  {(selectedMeeting.masterTimeline || []).map((entry) => (
+                    <div key={`${entry.sourceLabel}-${entry._id}`} className="rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border-secondary)" }}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{entry.action}</div>
+                        <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>{new Date(entry.createdAt).toLocaleString()}</div>
+                      </div>
+                      <div className="text-xs mt-1" style={{ color: "var(--text-tertiary)" }}>{entry.sourceLabel} · {entry.createdByName}</div>
+                      {entry.notes && <div className="text-sm mt-2" style={{ color: "var(--text-secondary)" }}>{entry.notes}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="portal-card">
+                <div className="portal-stat__label">Files Shared With Request</div>
+                <div className="mt-3">
+                  {selectedMeeting.attachments?.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedMeeting.attachments.map((file, index) => (
+                        <a
+                          key={`${file.name || "file"}-${index}`}
+                          href={file.data || "#"}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="portal-btn-secondary"
+                        >
+                          {file.name || `Attachment ${index + 1}`}
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No documents were attached with this meeting request.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
 
     return (
       <div className="p-6 max-w-[1320px] mx-auto space-y-5">
@@ -107,9 +292,8 @@ export default function MeetingsPage() {
                   </thead>
                   <tbody>
                     {citizenMeetings.map((meeting) => {
-                      const isSelected = String(selectedMeeting?._id || "") === String(meeting._id);
                       return (
-                        <tr key={meeting._id} className={`border-b border-slate-100 dark:border-slate-800 last:border-b-0 ${isSelected ? "bg-indigo-50/60 dark:bg-slate-800/80" : "bg-white dark:bg-slate-900"}`}>
+                        <tr key={meeting._id} className="border-b border-slate-100 dark:border-slate-800 last:border-b-0 bg-white dark:bg-slate-900">
                           <td className="px-4 py-4 align-top text-[0.76rem] font-semibold text-slate-500 dark:text-slate-400">{meeting.requestId}</td>
                           <td className="px-4 py-4 align-top">
                             <div className="font-semibold text-slate-900 dark:text-slate-100">{meeting.purpose}</div>
@@ -122,7 +306,7 @@ export default function MeetingsPage() {
                           </td>
                           <td className="px-4 py-4 align-top">
                             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[0.7rem] font-semibold bg-violet-100 text-violet-700">
-                              {meeting.status === "rejected" ? "High" : meeting.status === "scheduled" ? "Planned" : "Standard"}
+                              {meeting.priority || (meeting.status === "rejected" ? "HIGH" : meeting.status === "scheduled" ? "MEDIUM" : "LOW")}
                             </span>
                           </td>
                           <td className="px-4 py-4 align-top">
@@ -141,7 +325,7 @@ export default function MeetingsPage() {
                           <td className="px-4 py-4 align-top">
                             <button
                               type="button"
-                              onClick={() => setSelectedMeetingId(String(meeting._id))}
+                              onClick={() => navigate(`/meetings/${meeting._id}`)}
                               className="px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-[0.76rem] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                             >
                               View Details
@@ -178,7 +362,7 @@ export default function MeetingsPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setSelectedMeetingId(String(meeting._id))}
+                      onClick={() => navigate(`/meetings/${meeting._id}`)}
                       className="mt-4 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-[0.76rem] font-semibold text-slate-700 dark:text-slate-200"
                     >
                       View Details
@@ -196,100 +380,9 @@ export default function MeetingsPage() {
               </div>
             </div>
 
-            {selectedMeeting && (
-              <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-700 shadow-sm p-5 md:p-6 space-y-5">
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-                  <div>
-                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">{selectedMeeting.requestId}</div>
-                    <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 mt-1">{selectedMeeting.purpose}</h2>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                      This panel reflects the latest admin processing for your meeting request.
-                    </p>
-                  </div>
-                  <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${statusBadgeClass(selectedMeeting.status)}`}>
-                    {selectedMeeting.statusLabel}
-                  </span>
-                </div>
-
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50 p-4">
-                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">Admin Desk</div>
-                    <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      {selectedMeeting.assignedAdminName || selectedMeeting.referralAdminName || "General Admin Pool"}
-                    </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Referral: {selectedMeeting.referralAdminName || "Not specified"}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50 p-4">
-                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">Meeting Schedule</div>
-                    <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      {selectedMeeting.scheduleDate ? `${selectedMeeting.scheduleDate} ${selectedMeeting.scheduleTime || ""}` : "Pending admin scheduling"}
-                    </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      {selectedMeeting.scheduleLocation || "Location not set yet"}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50 p-4">
-                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">Meeting Access</div>
-                    <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      Visitor ID: {selectedMeeting.visitorId || "Pending"}
-                    </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Docket: {selectedMeeting.meetingDocket || "Pending"}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
-                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">Admin Notes</div>
-                    <div className="mt-2 text-sm text-slate-700 dark:text-slate-200">
-                      {selectedMeeting.adminNotes || "No admin notes added yet."}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
-                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">Verification Update</div>
-                    <div className="mt-2 text-sm text-slate-700 dark:text-slate-200">
-                      {selectedMeeting.verificationOutcome || (selectedMeeting.status === "verification_needed" ? "Verification call pending." : "No verification note yet.")}
-                    </div>
-                  </div>
-                </div>
-
-                {selectedMeeting.rejectReason && (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-                    <div className="text-[0.68rem] tracking-[0.16em] uppercase text-rose-500">Rejection Note</div>
-                    <div className="mt-2 text-sm text-rose-700">{selectedMeeting.rejectReason}</div>
-                  </div>
-                )}
-
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
-                  <div className="text-[0.68rem] tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">Files Shared With Request</div>
-                  <div className="mt-3">
-                    {selectedMeeting.attachments?.length ? (
-                      <div className="flex flex-wrap gap-2">
-                        {selectedMeeting.attachments.map((file, index) => (
-                          <a
-                            key={`${file.name || "file"}-${index}`}
-                            href={file.data || "#"}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                          >
-                            {file.name || `Attachment ${index + 1}`}
-                          </a>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-500 dark:text-slate-400">No documents were attached with this meeting request.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+	          </>
+	        )}
+	      </div>
     );
   }
 

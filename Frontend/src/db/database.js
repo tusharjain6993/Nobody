@@ -2,7 +2,10 @@ import initSqlJs from "sql.js";
 
 const DB_STORAGE_KEY = "hcm_demo_sqlite_v3";
 const DB_SCHEMA_VERSION_KEY = "hcm_demo_schema_version";
-const DB_SCHEMA_VERSION = "11";
+const DB_SCHEMA_VERSION = "13";
+const DB_SEED_PACK_KEY = "hcm_demo_seed_pack";
+const DB_SNAPSHOT_INDEX_KEY = "hcm_demo_snapshot_index";
+const DB_SNAPSHOT_PREFIX = "hcm_demo_snapshot_";
 
 let db = null;
 let dbPromise = null;
@@ -25,16 +28,28 @@ function fromBase64(value) {
   return bytes;
 }
 
+function serializeDb() {
+  if (!db) return "";
+  return toBase64(db.export());
+}
+
 function persistDb() {
   if (!db) return;
-  const bytes = db.export();
-  localStorage.setItem(DB_STORAGE_KEY, toBase64(bytes));
+  localStorage.setItem(DB_STORAGE_KEY, serializeDb());
   localStorage.setItem(DB_SCHEMA_VERSION_KEY, DB_SCHEMA_VERSION);
 }
 
 function clearPersistedDb() {
   localStorage.removeItem(DB_STORAGE_KEY);
   localStorage.removeItem(DB_SCHEMA_VERSION_KEY);
+}
+
+function getStoredSeedPack() {
+  return localStorage.getItem(DB_SEED_PACK_KEY) || "default";
+}
+
+function setStoredSeedPack(seedPack) {
+  localStorage.setItem(DB_SEED_PACK_KEY, seedPack || "default");
 }
 
 function hasColumn(tableName, columnName) {
@@ -50,11 +65,19 @@ function isSchemaCompatible() {
       ["users", "citizenId"],
       ["users", "pinCode"],
       ["users", "photoData"],
+      ["users", "failedLoginAttempts"],
+      ["users", "lockedUntil"],
       ["meeting_requests", "attachments"],
       ["meeting_requests", "meetingDocket"],
+      ["meeting_requests", "priority"],
+      ["meeting_requests", "priorityReason"],
+      ["meeting_requests", "statusReason"],
+      ["meeting_requests", "executionStatus"],
       ["meeting_requests", "assignedAdminUserId"],
       ["complaints", "resolutionDocs"],
       ["complaints", "resolutionSummary"],
+      ["complaints", "statusReason"],
+      ["complaints", "reopenedCount"],
       ["complaints", "complaintDate"],
       ["calendar_events", "productivityScore"],
       ["calendar_events", "documents"],
@@ -68,7 +91,7 @@ function isSchemaCompatible() {
 
 function initializeFreshDb() {
   runSchema();
-  runSeeds();
+  runSeeds(getStoredSeedPack());
   persistDb();
 }
 
@@ -114,6 +137,11 @@ export function resetDemoDatabase() {
   clearPersistedDb();
 }
 
+export function resetDemoDatabaseWithSeed(seedPack = "default") {
+  setStoredSeedPack(seedPack);
+  resetDemoDatabase();
+}
+
 function runSchema() {
   db.run(`CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -138,6 +166,9 @@ function runSchema() {
     role TEXT NOT NULL,
     department TEXT DEFAULT '',
     isVerified INTEGER NOT NULL DEFAULT 1,
+    lastLoginAt TEXT DEFAULT '',
+    failedLoginAttempts INTEGER NOT NULL DEFAULT 0,
+    lockedUntil TEXT DEFAULT '',
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL
   )`);
@@ -181,9 +212,13 @@ function runSchema() {
     scheduleDate TEXT DEFAULT '',
     scheduleTime TEXT DEFAULT '',
     scheduleLocation TEXT DEFAULT '',
+    priority TEXT NOT NULL DEFAULT 'MEDIUM',
+    priorityReason TEXT DEFAULT '',
     visitorId TEXT DEFAULT '',
     meetingDocket TEXT DEFAULT '',
     adminNotes TEXT DEFAULT '',
+    statusReason TEXT DEFAULT '',
+    executionStatus TEXT NOT NULL DEFAULT 'pending',
     escalatedFromComplaintId INTEGER,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL
@@ -213,6 +248,8 @@ function runSchema() {
     callScheduledAt TEXT DEFAULT '',
     callOutcome TEXT DEFAULT '',
     escalatedMeetingRequestId INTEGER,
+    statusReason TEXT DEFAULT '',
+    reopenedCount INTEGER NOT NULL DEFAULT 0,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL
   )`);
@@ -264,9 +301,7 @@ function runSchema() {
   )`);
 }
 
-function runSeeds() {
-  const now = new Date().toISOString();
-
+function insertUsers(now) {
   const seedUsers = [
     {
       name: "Admin Demo",
@@ -341,8 +376,8 @@ function runSeeds() {
     const phones = user.phoneNumbers || [];
     db.run(
       `INSERT INTO users (
-        name,email,password,aadhaar,phonePrimary,phoneSecondary,phoneTertiary,phoneNumbers,age,gender,pinCode,state,city,mpName,photoName,photoType,photoData,citizenId,role,department,isVerified,createdAt,updatedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        name,email,password,aadhaar,phonePrimary,phoneSecondary,phoneTertiary,phoneNumbers,age,gender,pinCode,state,city,mpName,photoName,photoType,photoData,citizenId,role,department,isVerified,lastLoginAt,failedLoginAttempts,lockedUntil,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         user.name,
         user.email,
@@ -365,12 +400,17 @@ function runSeeds() {
         user.role,
         user.department || "",
         1,
+        "",
+        0,
+        "",
         now,
         now,
       ]
     );
   });
+}
 
+function insertDirectory(now) {
   const departments = [
     ["Culture Affairs Desk", "Culture"],
     ["Tourism Outreach Cell", "Tourism"],
@@ -401,15 +441,17 @@ function runSeeds() {
       [...row, now, now]
     );
   });
+}
 
+function insertDefaultOperationalData(now) {
   db.run(
     `INSERT INTO meeting_requests (
-      requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,assignedAdminUserId,assignedAdminName,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleLocation,visitorId,meetingDocket,adminNotes,escalatedFromComplaintId,createdAt,updatedAt
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,assignedAdminUserId,assignedAdminName,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleLocation,priority,priorityReason,visitorId,meetingDocket,adminNotes,statusReason,executionStatus,escalatedFromComplaintId,createdAt,updatedAt
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       "MREQ-000001",
-      4,
-      JSON.stringify({ name: "Citizen User", citizenId: "CTZ-HP-000001", aadhaar: "123412341234", phoneNumbers: ["9876543210", "9876500000"] }),
+      6,
+      JSON.stringify({ name: "Citizen User", citizenId: "CTZ-HP-000001", aadhaar: "****-****-1234", phoneNumbers: ["9876543210"] }),
       "Discussion on cultural scholarship release",
       1,
       "Admin Demo",
@@ -424,9 +466,13 @@ function runSeeds() {
       new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
       "11:30",
       "North Block Meeting Room 3",
+      "HIGH",
+      "Scholarship release deadline falls within the next 72 hours.",
       "VIS-2026-001",
       "DOC-2026-001",
       "Carry scholarship application copy.",
+      "Admin approved and scheduled after verification.",
+      "pending",
       null,
       now,
       now,
@@ -435,12 +481,12 @@ function runSeeds() {
 
   db.run(
     `INSERT INTO complaints (
-      complaintId,citizenId,citizenSnapshot,title,details,attachments,resolutionDocs,status,assignedAdminUserId,assignedAdminName,referralAdminUserId,department,officerName,officerContact,manualContact,callScheduledAt,callOutcome,escalatedMeetingRequestId,createdAt,updatedAt
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      complaintId,citizenId,citizenSnapshot,title,details,attachments,resolutionDocs,status,assignedAdminUserId,assignedAdminName,referralAdminUserId,department,officerName,officerContact,manualContact,callScheduledAt,callOutcome,escalatedMeetingRequestId,statusReason,reopenedCount,createdAt,updatedAt
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       "COMP-000001",
-      5,
-      JSON.stringify({ name: "Aman Sogani", citizenId: "CTZ-HP-000002", aadhaar: "345678901234", phoneNumbers: ["9876543215"] }),
+      7,
+      JSON.stringify({ name: "Aman Sogani", citizenId: "CTZ-HP-000002", aadhaar: "****-****-1234", phoneNumbers: ["9876543215"] }),
       "Tourism permit approval delayed",
       "A district tourism permit has been pending for over six weeks without a response.",
       JSON.stringify([]),
@@ -456,6 +502,8 @@ function runSeeds() {
       "",
       "",
       null,
+      "Awaiting admin assignment from the common pool.",
+      0,
       now,
       now,
     ]
@@ -483,7 +531,7 @@ function runSeeds() {
       "Chair",
       "Culture",
       9.1,
-      3,
+      5,
       "DEO Demo",
       now,
       now,
@@ -494,6 +542,156 @@ function runSeeds() {
     `INSERT INTO notifications (userId,type,message,link,isRead,createdAt) VALUES (?,?,?,?,0,?)`,
     [1, "Complaint Submitted", "A new complaint has entered the common complaint pool.", "/cases/complaint/1", now]
   );
+}
+
+function insertBacklogScenario(now) {
+  db.run(
+    `INSERT INTO complaints (
+      complaintId,citizenId,citizenSnapshot,title,details,complaintDate,complaintLocation,complaintType,attachments,resolutionDocs,status,assignedAdminUserId,assignedAdminName,referralAdminUserId,department,officerName,officerContact,manualContact,callScheduledAt,callOutcome,escalatedMeetingRequestId,statusReason,reopenedCount,createdAt,updatedAt
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      "COMP-000002",
+      6,
+      JSON.stringify({ name: "Citizen User", citizenId: "CTZ-HP-000001", aadhaar: "****-****-1234", phoneNumbers: ["9876543210"] }),
+      "Water connection file pending in district office",
+      "The file has been pending despite multiple visits to the district office.",
+      new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      "Jaipur Collectorate",
+      "Public Grievance",
+      JSON.stringify([]),
+      JSON.stringify([]),
+      "followup_in_progress",
+      1,
+      "Admin Demo",
+      1,
+      "Public Grievance Cell",
+      "Karan Malhotra",
+      "9811100004",
+      "",
+      new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      "Department acknowledged delay and requested 3 more working days.",
+      null,
+      "Follow-up call completed; waiting for departmental action.",
+      0,
+      now,
+      now,
+    ]
+  );
+
+  db.run(
+    `INSERT INTO meeting_requests (
+      requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,assignedAdminUserId,assignedAdminName,attachments,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleLocation,priority,priorityReason,visitorId,meetingDocket,adminNotes,statusReason,executionStatus,escalatedFromComplaintId,createdAt,updatedAt
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      "MREQ-000002",
+      7,
+      JSON.stringify({ name: "Aman Sogani", citizenId: "CTZ-HP-000002", aadhaar: "****-****-1234", phoneNumbers: ["9876543215"] }),
+      "Urgent review of tourism permit blockage",
+      2,
+      "Priya Sharma",
+      2,
+      "Priya Sharma",
+      JSON.stringify([]),
+      "under_review",
+      "Citizen confirmed documentation and district office references during verification.",
+      "",
+      "",
+      "",
+      "",
+      "HIGH",
+      "Investor timeline and district tourism season impact require minister attention.",
+      "",
+      "",
+      "Escalated from complaint due to repeated departmental delays.",
+      "Verification completed; admin decision pending.",
+      "pending",
+      1,
+      now,
+      now,
+    ]
+  );
+}
+
+function runSeeds(seedPack = "default") {
+  const now = new Date().toISOString();
+  insertUsers(now);
+  insertDirectory(now);
+  insertDefaultOperationalData(now);
+  if (seedPack === "backlog") {
+    insertBacklogScenario(now);
+  }
+}
+
+export function listDemoSeedPacks() {
+  return [
+    { id: "default", label: "Default Demo", description: "Balanced seed data with one scheduled meeting and one open complaint." },
+    { id: "backlog", label: "Backlog Scenario", description: "Adds a backlog complaint and a high-priority escalated meeting under review." },
+  ];
+}
+
+export function exportDemoDatabase() {
+  if (!db) return null;
+  return {
+    schemaVersion: DB_SCHEMA_VERSION,
+    seedPack: getStoredSeedPack(),
+    exportedAt: new Date().toISOString(),
+    snapshot: serializeDb(),
+  };
+}
+
+export async function importDemoDatabase(payload) {
+  const snapshot = payload?.snapshot;
+  if (!snapshot || typeof snapshot !== "string") throw new Error("Import file does not contain a valid demo snapshot");
+  localStorage.setItem(DB_STORAGE_KEY, snapshot);
+  localStorage.setItem(DB_SCHEMA_VERSION_KEY, DB_SCHEMA_VERSION);
+  setStoredSeedPack(payload?.seedPack || "default");
+  db = null;
+  dbPromise = null;
+  await getDb();
+}
+
+function getSnapshotIndex() {
+  try {
+    return JSON.parse(localStorage.getItem(DB_SNAPSHOT_INDEX_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function setSnapshotIndex(items) {
+  localStorage.setItem(DB_SNAPSHOT_INDEX_KEY, JSON.stringify(items));
+}
+
+export function listDemoSnapshots() {
+  return getSnapshotIndex();
+}
+
+export function saveDemoSnapshot(name) {
+  if (!db) throw new Error("Database is not initialized");
+  const cleanName = String(name || "").trim();
+  if (!cleanName) throw new Error("Snapshot name is required");
+  const entry = {
+    name: cleanName,
+    savedAt: new Date().toISOString(),
+    seedPack: getStoredSeedPack(),
+  };
+  localStorage.setItem(`${DB_SNAPSHOT_PREFIX}${cleanName}`, JSON.stringify({ ...entry, snapshot: serializeDb() }));
+  const nextIndex = getSnapshotIndex().filter((item) => item.name !== cleanName);
+  nextIndex.unshift(entry);
+  setSnapshotIndex(nextIndex.slice(0, 12));
+  return entry;
+}
+
+export async function restoreDemoSnapshot(name) {
+  const raw = localStorage.getItem(`${DB_SNAPSHOT_PREFIX}${name}`);
+  if (!raw) throw new Error("Snapshot not found");
+  const parsed = JSON.parse(raw);
+  await importDemoDatabase(parsed);
+}
+
+export function deleteDemoSnapshot(name) {
+  localStorage.removeItem(`${DB_SNAPSHOT_PREFIX}${name}`);
+  setSnapshotIndex(getSnapshotIndex().filter((item) => item.name !== name));
 }
 
 export function queryAll(sql, params = []) {
