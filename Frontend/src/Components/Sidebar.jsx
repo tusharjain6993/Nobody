@@ -111,7 +111,7 @@ function DeoVerificationMenu({ collapsed, open, onToggle, onNavigate }) {
     ["LOW", "Low Requests"],
     ["MEDIUM", "Medium Requests"],
     ["HIGH", "High Requests"],
-    ["CRITICAL", "Critical Requests"],
+    ["VIP", "VIP Requests"],
   ];
 
   return (

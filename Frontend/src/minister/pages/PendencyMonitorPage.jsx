@@ -6,7 +6,7 @@ const PRIORITY_COLORS = {
   LOW: "text-emerald-600",
   MEDIUM: "text-amber-600",
   HIGH: "text-orange-600",
-  CRITICAL: "text-red-600",
+  VIP: "text-red-600",
 };
 
 function StatCard({ label, value, accent }) {

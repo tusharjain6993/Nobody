@@ -25,14 +25,15 @@ function isResolvedItem(item) {
 }
 
 function getQueueBuckets(data) {
+  const sortLatestFirst = (items) => [...items].sort((left, right) => new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0));
   return {
-    complaints: data.complaints.filter(isComplaintQueueItem),
-    meetings: data.meetingRequests.filter(isMeetingQueueItem),
-    myCases: [
+    complaints: sortLatestFirst(data.complaints.filter(isComplaintQueueItem)),
+    meetings: sortLatestFirst(data.meetingRequests.filter(isMeetingQueueItem)),
+    myCases: sortLatestFirst([
       ...data.complaints.filter((item) => isMyComplaint(item, data.myAdminId)),
       ...data.meetingRequests.filter((item) => isMyMeeting(item, data.myAdminId)),
-    ],
-    completedCases: [...data.complaints, ...data.meetingRequests].filter(isResolvedItem),
+    ]),
+    completedCases: sortLatestFirst([...data.complaints, ...data.meetingRequests].filter(isResolvedItem)),
   };
 }
 

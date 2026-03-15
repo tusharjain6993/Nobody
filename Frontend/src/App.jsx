@@ -10,6 +10,7 @@ import ProfileSettingsPage from "./Components/pages/ProfileSettingsPage";
 
 import HCMLoginPage from "./minister/pages/HCMLoginPage";
 import HCMRegisterPage from "./minister/pages/HCMRegisterPage";
+import HCMRecoverCitizenIdPage from "./minister/pages/HCMRecoverCitizenIdPage";
 import HCMCasesListPage from "./minister/pages/HCMCasesListPage";
 import HCMCaseDetailPage from "./minister/pages/HCMCaseDetailPage";
 import HCMNewCasePage from "./minister/pages/HCMNewCasePage";
@@ -39,6 +40,7 @@ function App() {
         <Route path="/meeting-pass/:token" element={<MeetingPassVerifyPage />} />
         <Route path="/login" element={isAuthenticated ? <Navigate to={defaultRoute} replace /> : <HCMLoginPage />} />
         <Route path="/register" element={isAuthenticated ? <Navigate to={defaultRoute} replace /> : <HCMRegisterPage />} />
+        <Route path="/recover-citizen-id" element={isAuthenticated ? <Navigate to={defaultRoute} replace /> : <HCMRecoverCitizenIdPage />} />
 
         <Route
           element={(

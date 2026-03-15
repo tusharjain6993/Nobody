@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckmarkCircleRegular, ErrorCircleRegular } from "@fluentui/react-icons";
+import { AttachRegular, CheckmarkCircleRegular, ErrorCircleRegular, PeopleRegular } from "@fluentui/react-icons";
 import { Link } from "react-router-dom";
 import { adminDirectoryApi, citizenApi } from "../ministerApi";
 import { filesToDocuments, validateComplaintFiles } from "../../utils/fileHelpers";
@@ -38,12 +38,23 @@ function SubmissionModal({ open, title, message, onClose }) {
 }
 
 export default function HCMNewCasePage() {
+  const complaintCategories = [
+    "Tourism Infrastructure",
+    "Heritage & Monuments",
+    "Cultural Institutions & Activities",
+    "Tourism Services & Visitor Experience",
+    "Constituency Civic Issues",
+    "Government Schemes & Benefits",
+    "Employment & Skill Development",
+    "Public Grievances Against Departments",
+    "Suggestions / Public Feedback",
+  ];
   const [activeTab, setActiveTab] = useState("");
   const [admins, setAdmins] = useState([]);
   const [error, setError] = useState("");
   const [successModal, setSuccessModal] = useState({ open: false, title: "", message: "" });
   const [loading, setLoading] = useState(false);
-  const [meetingForm, setMeetingForm] = useState({ purpose: "", referralAdminUserId: "", files: [] });
+  const [meetingForm, setMeetingForm] = useState({ purpose: "", referralAdminUserId: "", files: [], companions: [{ name: "", phone: "" }] });
   const [complaintForm, setComplaintForm] = useState({ title: "", details: "", complaintLocation: "", complaintType: "", files: [] });
 
   useEffect(() => {
@@ -61,13 +72,16 @@ export default function HCMNewCasePage() {
         purpose: meetingForm.purpose,
         referralAdminUserId: meetingForm.referralAdminUserId,
         attachments: attachmentDocs,
+        companions: meetingForm.companions
+          .map((person) => ({ name: String(person.name || "").trim(), phone: String(person.phone || "").replace(/\D/g, "").slice(0, 10) }))
+          .filter((person) => person.name || person.phone),
       });
       setSuccessModal({
         open: true,
         title: "Meeting Submitted",
         message: `Your meeting request ${res.meetingRequest.requestId} has been submitted successfully.`,
       });
-      setMeetingForm({ purpose: "", referralAdminUserId: "", files: [] });
+      setMeetingForm({ purpose: "", referralAdminUserId: "", files: [], companions: [{ name: "", phone: "" }] });
     } catch (err) {
       setError(err.message || "Unable to submit meeting request");
     } finally {
@@ -152,8 +166,60 @@ export default function HCMNewCasePage() {
             </div>
             <div className="portal-field">
               <label className="portal-field__label">Optional Document Upload</label>
-              <input className="portal-input" type="file" multiple onChange={(event) => setMeetingForm((current) => ({ ...current, files: sanitizeSelectedFiles(event.target.files) }))} />
-              {meetingForm.files.length > 0 && <div className="text-sm" style={{ color: "var(--text-tertiary)" }}>{meetingForm.files.length} file(s) selected</div>}
+              <label className="portal-card portal-card--soft cursor-pointer flex items-center gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full" style={{ background: "var(--accent-primary-subtle)", color: "var(--accent-primary)" }}>
+                  <AttachRegular />
+                </span>
+                <div>
+                  <div className="font-semibold" style={{ color: "var(--text-primary)" }}>Upload Supporting Files</div>
+                  <div className="text-xs" style={{ color: "var(--text-secondary)" }}>{meetingForm.files.length ? `${meetingForm.files.length} file(s) selected` : "Add PDFs, images, or office documents"}</div>
+                </div>
+                <input className="hidden" type="file" multiple onChange={(event) => setMeetingForm((current) => ({ ...current, files: sanitizeSelectedFiles(event.target.files) }))} />
+              </label>
+            </div>
+            <div className="portal-field md:col-span-2">
+              <label className="portal-field__label flex items-center gap-2"><PeopleRegular /> Additional Attendees</label>
+              <div className="space-y-3">
+                {meetingForm.companions.map((person, index) => (
+                  <div key={`companion-${index}`} className="grid md:grid-cols-[1fr_220px_auto] gap-3 items-start">
+                    <input
+                      className="portal-input"
+                      value={person.name}
+                      onChange={(event) => setMeetingForm((current) => ({
+                        ...current,
+                        companions: current.companions.map((entry, entryIndex) => entryIndex === index ? { ...entry, name: event.target.value } : entry),
+                      }))}
+                      placeholder="Attendee name"
+                    />
+                    <input
+                      className="portal-input"
+                      value={person.phone}
+                      onChange={(event) => setMeetingForm((current) => ({
+                        ...current,
+                        companions: current.companions.map((entry, entryIndex) => entryIndex === index ? { ...entry, phone: event.target.value.replace(/\D/g, "").slice(0, 10) } : entry),
+                      }))}
+                      placeholder="Phone number"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setMeetingForm((current) => ({
+                        ...current,
+                        companions: current.companions.length === 1 ? [{ name: "", phone: "" }] : current.companions.filter((_, entryIndex) => entryIndex !== index),
+                      }))}
+                      className="portal-btn-secondary"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setMeetingForm((current) => ({ ...current, companions: [...current.companions, { name: "", phone: "" }] }))}
+                  className="portal-btn-secondary"
+                >
+                  Add Person
+                </button>
+              </div>
             </div>
           </div>
           <button type="submit" disabled={loading} className="portal-btn w-full mt-6">
@@ -179,7 +245,10 @@ export default function HCMNewCasePage() {
             </div>
             <div className="portal-field">
               <label className="portal-field__label">Type</label>
-              <input className="portal-input" value={complaintForm.complaintType} onChange={(event) => setComplaintForm((current) => ({ ...current, complaintType: event.target.value }))} placeholder="Complaint type" />
+              <select className="portal-select" value={complaintForm.complaintType} onChange={(event) => setComplaintForm((current) => ({ ...current, complaintType: event.target.value }))}>
+                <option value="">Select complaint category</option>
+                {complaintCategories.map((category) => <option key={category} value={category}>{category}</option>)}
+              </select>
             </div>
             <div className="portal-field">
               <label className="portal-field__label">Upload Documents</label>

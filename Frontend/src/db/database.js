@@ -2,7 +2,7 @@ import initSqlJs from "sql.js";
 
 const DB_STORAGE_KEY = "hcm_demo_sqlite_v3";
 const DB_SCHEMA_VERSION_KEY = "hcm_demo_schema_version";
-const DB_SCHEMA_VERSION = "15";
+const DB_SCHEMA_VERSION = "16";
 const DB_SEED_PACK_KEY = "hcm_demo_seed_pack";
 const DB_SNAPSHOT_INDEX_KEY = "hcm_demo_snapshot_index";
 const DB_SNAPSHOT_PREFIX = "hcm_demo_snapshot_";
@@ -80,6 +80,7 @@ function isSchemaCompatible() {
       ["meeting_requests", "executionStatus"],
       ["meeting_requests", "assignedAdminUserId"],
       ["meeting_requests", "scheduleEndTime"],
+      ["meeting_requests", "companions"],
       ["complaints", "resolutionDocs"],
       ["complaints", "resolutionSummary"],
       ["complaints", "statusReason"],
@@ -219,6 +220,7 @@ function runSchema() {
     scheduleTime TEXT DEFAULT '',
     scheduleEndTime TEXT DEFAULT '',
     scheduleLocation TEXT DEFAULT '',
+    companions TEXT NOT NULL DEFAULT '[]',
     priority TEXT NOT NULL DEFAULT 'MEDIUM',
     priorityReason TEXT DEFAULT '',
     visitorId TEXT DEFAULT '',
@@ -677,7 +679,7 @@ function insertDemoOperationalData(now, directory, seedPack = "default") {
     "Representation on delayed business permit approval",
   ];
   const complaintStatuses = ["pooled", "assigned", "department_contact_identified", "call_scheduled", "followup_in_progress", "resolved", "completed"];
-  const verificationPriorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+  const verificationPriorities = ["LOW", "MEDIUM", "HIGH", "VIP"];
   const complaintRecords = [];
   let complaintCounter = 1;
   let meetingCounter = 1;

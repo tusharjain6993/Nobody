@@ -92,7 +92,7 @@ export const demoCases = [
     pincode: "171001",
     districtCity: "Shimla",
     localAreaMinister: "Sh. Anurag Sharma",
-    urgency: "CRITICAL",
+    urgency: "VIP",
     details: "The main approach road to the village has caved in due to recent rains. School children and elderly cannot commute safely.",
     documents: [
       { name: "Road_photos.pdf", url: "#", uploadedAt: new Date().toISOString() },
@@ -244,7 +244,7 @@ export const demoDashboardStats = {
   scheduled: demoCases.filter((c) => c.status === "SCHEDULED").length,
   closed: demoCases.filter((c) => c.status === "CLOSED").length,
   resolved: 0,
-  urgentHigh: demoCases.filter((c) => c.urgency === "HIGH" || c.urgency === "CRITICAL").length,
+  urgentHigh: demoCases.filter((c) => c.urgency === "HIGH" || c.urgency === "VIP").length,
   openAssignments: demoCases.reduce(
     (sum, c) =>
       sum +
@@ -260,4 +260,3 @@ export const demoDashboardStats = {
 export const demoUpcomingMeetings = demoCases
   .filter((c) => c.status === "SCHEDULED" && c.schedule?.scheduledAt)
   .sort((a, b) => new Date(a.schedule.scheduledAt) - new Date(b.schedule.scheduledAt));
-

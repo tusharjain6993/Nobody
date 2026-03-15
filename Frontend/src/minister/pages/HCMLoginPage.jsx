@@ -1,28 +1,86 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { BuildingBankRegular } from "@fluentui/react-icons";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { BuildingBankRegular, ChevronRightRegular, DataBarVerticalRegular, CalendarLtrRegular, DocumentAddRegular, PersonRegular } from "@fluentui/react-icons";
 import { useHCMAuth } from "../HCMAuthContext";
 import { authApi } from "../ministerApi";
 import { resetDemoDatabase } from "../../db/database";
 import "./authPages.css";
 
+const ROLE_CONFIG = {
+  admin: {
+    label: "Administrator",
+    description: "User management, departments, config & audit",
+    icon: DataBarVerticalRegular,
+    tint: "auth-role-card--admin",
+  },
+  minister: {
+    label: "Minister",
+    description: "View tasks, assign departments, monitor progress",
+    icon: BuildingBankRegular,
+    tint: "auth-role-card--minister",
+  },
+  deo: {
+    label: "DEO (Data Entry Operator)",
+    description: "Enter data, upload documents, manage records",
+    icon: CalendarLtrRegular,
+    tint: "auth-role-card--deo",
+  },
+  citizen: {
+    label: "Citizen",
+    description: "Submit complaints, request meetings, track status",
+    icon: DocumentAddRegular,
+    tint: "auth-role-card--citizen",
+  },
+};
+
+function RoleCard({ role, active, onClick }) {
+  const config = ROLE_CONFIG[role];
+  const Icon = config.icon;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`auth-role-card ${config.tint} ${active ? "auth-role-card--active" : ""}`}
+    >
+      <span className="auth-role-card__icon">
+        <Icon />
+      </span>
+      <span className="auth-role-card__content">
+        <span className="auth-role-card__title">{config.label}</span>
+        <span className="auth-role-card__desc">{config.description}</span>
+      </span>
+      <span className="auth-role-card__arrow">
+        <ChevronRightRegular />
+      </span>
+    </button>
+  );
+}
+
 export default function HCMLoginPage() {
-  const [loginAs, setLoginAs] = useState("citizen");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedRole = String(searchParams.get("role") || "").toLowerCase();
+  const initialRole = ["admin", "minister", "deo", "citizen"].includes(requestedRole) ? requestedRole : "";
+  const [loginAs, setLoginAs] = useState(initialRole);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [citizenId, setCitizenId] = useState("");
-  const [recoveryAadhaar, setRecoveryAadhaar] = useState("");
-  const [recoveryPhone, setRecoveryPhone] = useState("");
-  const [recoveredCitizenId, setRecoveredCitizenId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useHCMAuth();
   const navigate = useNavigate();
 
+  const isCitizen = loginAs === "citizen";
+  const hasSelectedRole = !!loginAs;
+
+  const selectRole = (role) => {
+    setLoginAs(role);
+    setError("");
+    setSearchParams({ role });
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
-    setRecoveredCitizenId("");
     setLoading(true);
     try {
       const data = loginAs === "citizen"
@@ -45,20 +103,6 @@ export default function HCMLoginPage() {
     }
   };
 
-  const handleRecover = async () => {
-    setError("");
-    setRecoveredCitizenId("");
-    try {
-      const res = await authApi.recoverCitizenId({ aadhaar: recoveryAadhaar, phone: recoveryPhone });
-      const completion = res.profileCompletion?.isComplete
-        ? "Profile complete"
-        : `Profile incomplete (${res.profileCompletion?.percent || 0}%)`;
-      setRecoveredCitizenId(`${res.name}: ${res.citizenId} · ${completion}`);
-    } catch (err) {
-      setError(err.message || "Unable to recover Citizen ID");
-    }
-  };
-
   const handleResetDemo = () => {
     resetDemoDatabase();
     localStorage.removeItem("hcm_user");
@@ -76,20 +120,31 @@ export default function HCMLoginPage() {
           <div className="auth-logo">
             <BuildingBankRegular style={{ fontSize: "1.75rem" }} />
           </div>
-          <h1 className="auth-title">HCM Portal</h1>
-          <p className="auth-subtitle">Citizen, admin, and DEO demo access with session expiry and account lockout simulation</p>
+          <h1 className="auth-title">E-PARINAM</h1>
+          <p className="auth-subtitle">Ministry of Culture • Govt. of India</p>
         </div>
 
-        <div className="auth-login-type">
-          <button type="button" onClick={() => { setLoginAs("citizen"); setError(""); }} className={`auth-login-type__btn ${loginAs === "citizen" ? "auth-login-type__btn--active" : ""}`}>Citizen</button>
-          <button type="button" onClick={() => { setLoginAs("admin"); setError(""); }} className={`auth-login-type__btn ${loginAs === "admin" ? "auth-login-type__btn--active" : ""}`}>Admin / DEO</button>
+        <div className="auth-role-select">
+          <div className="auth-role-select__label">Select Your Role</div>
+          <div className="auth-role-select__list">
+            {["admin", "minister", "deo", "citizen"].map((role) => (
+              <RoleCard key={role} role={role} active={loginAs === role} onClick={() => selectRole(role)} />
+            ))}
+          </div>
         </div>
 
         {error && <div className="auth-error">{error}</div>}
-        {recoveredCitizenId && <div className="auth-error" style={{ background: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.35)", color: "#dcfce7" }}>Recovered Citizen ID: {recoveredCitizenId}</div>}
 
+        {hasSelectedRole && (
         <form onSubmit={handleSubmit}>
-          {loginAs === "citizen" ? (
+          <div className="auth-selected-role">
+            <span className="auth-selected-role__icon">
+              <PersonRegular />
+            </span>
+            <span>{ROLE_CONFIG[loginAs].label} Login</span>
+          </div>
+
+          {isCitizen ? (
             <>
               <div className="auth-field-group auth-field-group--last">
                 <label className="auth-label" htmlFor="citizen-id">CITIZEN ID</label>
@@ -128,31 +183,26 @@ export default function HCMLoginPage() {
           {loginAs === "admin" && (
             <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.8rem" }}>
               <button type="button" onClick={() => { setEmail("admin@portal.gov"); setPassword("admin123"); setError(""); }} className="auth-demo-btn">Use admin demo</button>
+            </div>
+          )}
+          {loginAs === "minister" && (
+            <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.8rem" }}>
               <button type="button" onClick={() => { setEmail("minister@portal.gov"); setPassword("minister123"); setError(""); }} className="auth-demo-btn">Use minister demo</button>
+            </div>
+          )}
+          {loginAs === "deo" && (
+            <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.8rem" }}>
               <button type="button" onClick={() => { setEmail("deo@portal.gov"); setPassword("deo123"); setError(""); }} className="auth-demo-btn">Use DEO demo</button>
             </div>
           )}
         </form>
-
-        {loginAs === "citizen" && (
-          <div style={{ marginTop: "1.4rem", paddingTop: "1rem", borderTop: "1px solid rgba(148,163,184,0.2)" }}>
-            <p className="auth-subtitle" style={{ marginBottom: "0.75rem" }}>Forgot Citizen ID</p>
-            <div className="auth-field-group">
-              <label className="auth-label">AADHAAR</label>
-              <input value={recoveryAadhaar} onChange={(event) => setRecoveryAadhaar(event.target.value.replace(/\D/g, "").slice(0, 12))} placeholder="12-digit Aadhaar" className="auth-input" />
-            </div>
-            <div className="auth-field-group auth-field-group--last">
-              <label className="auth-label">MOBILE NUMBER</label>
-              <input value={recoveryPhone} onChange={(event) => setRecoveryPhone(event.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit mobile number" className="auth-input" />
-            </div>
-            <button type="button" onClick={handleRecover} className="auth-demo-btn" style={{ width: "100%" }}>
-              Recover Citizen ID
-            </button>
-          </div>
         )}
 
         <div className="auth-footer" style={{ marginTop: "1.1rem" }}>
           New citizen? <Link to="/register" className="auth-link">Register and generate your Citizen ID</Link>
+        </div>
+        <div className="auth-footer" style={{ marginTop: "0.6rem" }}>
+          Forgot Citizen ID? <Link to="/recover-citizen-id" className="auth-link">Recover here</Link>
         </div>
         <div className="auth-footer" style={{ marginTop: "0.6rem" }}>
           Demo data out of sync?{" "}

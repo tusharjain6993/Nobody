@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useHCMAuth } from "../HCMAuthContext";
 import { calendarApi, meetingsApi } from "../ministerApi";
@@ -25,10 +25,10 @@ function getCitizenFacingStatusLabel(meeting) {
   return meeting.statusLabel;
 }
 
-const VERIFICATION_PRIORITY_OPTIONS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+const VERIFICATION_PRIORITY_OPTIONS = ["LOW", "MEDIUM", "HIGH", "VIP"];
 
 function getVerificationPriorityRank(priority = "") {
-  const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+  const order = { VIP: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
   return order[String(priority || "").toUpperCase()] ?? 4;
 }
 
@@ -117,6 +117,12 @@ export default function MeetingsPage() {
       if (priorityGap !== 0) return priorityGap;
       return new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0);
     });
+  const schedulingRows = useMemo(
+    () => meetings
+      .filter((meeting) => ["approved", "verification_needed", "under_review", "scheduled"].includes(meeting.status))
+      .sort((left, right) => new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0)),
+    [meetings]
+  );
 
   const getCitizenSafeTimeline = (entries = []) => entries.filter((entry) => {
     const text = `${entry.action || ""} ${entry.notes || ""}`.toLowerCase();
@@ -467,18 +473,18 @@ export default function MeetingsPage() {
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-2 mb-5">
           <div>
             <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-1">Scheduled Meetings</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl">Only meetings that have been approved and scheduled appear here. Pending requests stay in the work queue.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl">Meetings already in the scheduling pipeline appear here, including approved, verification-stage, under-review, and scheduled requests.</p>
           </div>
         </div>
         {loading ? (
           <div className="text-sm text-slate-500 py-8 text-center">Loading meetings…</div>
-        ) : meetings.filter((meeting) => meeting.status === "scheduled").length === 0 ? (
+        ) : schedulingRows.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-3d p-8 text-center">
             <p className="text-slate-400 text-sm">No meetings scheduled yet.</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {meetings.filter((meeting) => meeting.status === "scheduled").map((meeting) => (
+            {schedulingRows.map((meeting) => (
               <div key={meeting._id} className="bg-white rounded-2xl border border-slate-100 shadow-3d p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -486,7 +492,7 @@ export default function MeetingsPage() {
                     <h3 className="font-bold text-slate-900 text-sm">{meeting.purpose}</h3>
                     <div className="text-xs text-slate-500 mt-1">{meeting.citizenSnapshot?.name} · {meeting.citizenSnapshot?.phoneNumbers?.[0] || "Phone unavailable"} · Referral: {meeting.referralAdminName}</div>
                     {meeting.scheduleDate && <div className="text-xs text-slate-500 mt-1">{meeting.scheduleDate} · {meeting.scheduleTime} · {meeting.scheduleLocation}</div>}
-                    {(meeting.visitorId || meeting.meetingDocket) && <div className="text-xs text-slate-400 mt-1">Visitor ID: {meeting.visitorId || "Pending"} · Docket: {meeting.meetingDocket || "Pending"} · {meeting.priority === "VIP" || meeting.priority === "HIGH" ? "VIP Meeting" : "Standard Meeting"}</div>}
+                    {!!meeting.companions?.length && <div className="text-xs text-slate-400 mt-1">Attendees: {meeting.companions.map((person) => `${person.name} (${person.phone})`).join(", ")}</div>}
                   </div>
                   <span className="inline-block px-2 py-0.5 rounded-full text-[0.7rem] font-bold bg-emerald-100 text-emerald-700">{meeting.statusLabel}</span>
                 </div>

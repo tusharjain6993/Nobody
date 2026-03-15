@@ -270,8 +270,8 @@ function deriveMeetingNextAction(meeting) {
   if (meeting.executionStatus === "cancelled") return "Reschedule or close the meeting request.";
   if (meeting.status === "submitted") return "Approve or reject the meeting request.";
   if (meeting.status === "verification_needed") return "DEO should verify the citizen on call and return the request.";
-  if (meeting.status === "under_review") return "Schedule, reject, or return the meeting to the initial review state.";
-  if (meeting.status === "approved") return "Send the approved meeting for DEO verification or return it to the initial review state.";
+  if (meeting.status === "under_review") return "Schedule or reject the meeting.";
+  if (meeting.status === "approved") return "Send the approved meeting for DEO verification.";
   if (meeting.status === "scheduled") return "Citizen attends the meeting; admin can later mark completed or cancel.";
   if (meeting.status === "rejected") return "No further action unless the case is reopened separately.";
   return "Review workflow state.";
@@ -329,6 +329,7 @@ function buildMeetingRequest(row) {
       ? [{ name: row.attachmentName, type: row.attachmentType, data: row.attachmentData }]
       : []),
     attachment: row.attachmentData ? { name: row.attachmentName, type: row.attachmentType, data: row.attachmentData } : null,
+    companions: parseJson(row.companions, []),
     logs: queryAll("SELECT * FROM activity_logs WHERE entityType='meeting_request' AND entityId=? ORDER BY createdAt DESC", [row.id]),
     relatedComplaint: buildRelatedComplaintSummary(complaintRow),
     relatedNotifications: notifications,
@@ -701,8 +702,8 @@ export const citizenApi = {
     const requestId = nextCode("MREQ", "meeting_requests");
     execute(
       `INSERT INTO meeting_requests (
-        requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,attachments,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleEndTime,scheduleLocation,priority,priorityReason,visitorId,meetingDocket,adminNotes,statusReason,executionStatus,escalatedFromComplaintId,createdAt,updatedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,attachments,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleEndTime,scheduleLocation,companions,priority,priorityReason,visitorId,meetingDocket,adminNotes,statusReason,executionStatus,escalatedFromComplaintId,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         requestId,
         Number(user.id),
@@ -719,6 +720,8 @@ export const citizenApi = {
         "",
         "",
         "",
+        "",
+        JSON.stringify((body.companions || []).filter((item) => item?.name || item?.phone)),
         "",
         "",
         "",
@@ -855,16 +858,17 @@ export const workItemsApi = {
     assertMeetingTransition(row, ["approved"], "Only approved meetings can be sent for verification");
     const notes = typeof payload === "string" ? payload : String(payload.notes || "").trim();
     const verificationPriority = String(typeof payload === "string" ? "" : payload.priority || "").trim().toUpperCase() || "MEDIUM";
-    if (!["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(verificationPriority)) {
-      throw new Error("Verification priority must be Low, Medium, High, or Critical");
+    const normalizedPriority = verificationPriority === "CRITICAL" ? "VIP" : verificationPriority;
+    if (!["LOW", "MEDIUM", "HIGH", "VIP"].includes(normalizedPriority)) {
+      throw new Error("Verification priority must be Low, Medium, High, or VIP");
     }
     updateMeetingOwnership(row, user);
     execute(
       "UPDATE meeting_requests SET status='verification_needed', priority=?, verificationOutcome='', adminNotes=?, statusReason=?, updatedAt=? WHERE id=?",
       [
-        verificationPriority,
+        normalizedPriority,
         notes || row.adminNotes || "",
-        `${humanizePriority(verificationPriority)} priority verification requested by admin.`,
+        `${humanizePriority(normalizedPriority)} priority verification requested by admin.`,
         ts(),
         Number(id),
       ]
@@ -872,12 +876,12 @@ export const workItemsApi = {
     const updated = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
     const snapshot = parseJson(updated?.citizenSnapshot, {});
     const phone = snapshot.phoneNumbers?.[0] || "No phone available";
-    addLog("meeting_request", id, "Verification requested", `${humanizePriority(verificationPriority)} priority${notes ? ` · ${notes}` : ""}`, user);
+    addLog("meeting_request", id, "Verification requested", `${humanizePriority(normalizedPriority)} priority${notes ? ` · ${notes}` : ""}`, user);
     addNotificationForUsers(
       getDeoUsers().map((deo) => deo.id),
       "Verification Needed",
-      `${humanizePriority(verificationPriority)} priority: call citizen ${snapshot.citizenId || "Unknown"} on ${phone} for meeting ${updated?.requestId || ""}.`,
-      `/verification-requests?priority=${verificationPriority}`
+      `${humanizePriority(normalizedPriority)} priority: call citizen ${snapshot.citizenId || "Unknown"} on ${phone} for meeting ${updated?.requestId || ""}.`,
+      `/verification-requests?priority=${normalizedPriority}`
     );
     return workItemsApi.getMeetingRequest(id);
   },
@@ -1262,10 +1266,10 @@ export const meetingsApi = {
       };
     }
     if (user.role === "admin") {
-      return { meetings: queryAll("SELECT * FROM meeting_requests ORDER BY createdAt DESC").map(buildMeetingRequest) };
+      return { meetings: queryAll("SELECT * FROM meeting_requests ORDER BY updatedAt DESC, createdAt DESC").map(buildMeetingRequest) };
     }
     return {
-      meetings: queryAll("SELECT * FROM meeting_requests WHERE citizenId=? ORDER BY createdAt DESC", [Number(user.id)]).map(buildMeetingRequest),
+      meetings: queryAll("SELECT * FROM meeting_requests WHERE citizenId=? ORDER BY updatedAt DESC, createdAt DESC", [Number(user.id)]).map(buildMeetingRequest),
     };
   },
 
