@@ -81,6 +81,7 @@ export default function MeetingsPage() {
   });
   const [photos, setPhotos] = useState([]);
   const [documents, setDocuments] = useState([]);
+  const isVerificationRoute = location.pathname === "/verification-requests";
   const routePriority = String(searchParams.get("priority") || "").toUpperCase();
   const activeVerificationPriority = VERIFICATION_PRIORITY_OPTIONS.includes(routePriority) ? routePriority : "";
   const filteredVerificationRequests = [...verificationRequests]
@@ -543,16 +544,17 @@ export default function MeetingsPage() {
       />
       <div>
         <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-1">
-          {location.pathname === "/verification-requests" ? "Verification Requests" : "Calendar & Engagement"}
+          {isVerificationRoute ? "Verification Requests" : "Calendar & Engagement"}
         </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl">
-          {location.pathname === "/verification-requests"
+          {isVerificationRoute
             ? "Handle citizen verification requests raised by admins. Once updated here, the request goes back to the admin queue."
             : "Create invited events or scheduled office meetings, attach media references, and feed attended events into classification and productivity scoring."}
         </p>
       </div>
       {error && <div className="px-3 py-2 rounded-lg text-xs bg-red-50 text-red-600 border border-red-100">{error}</div>}
 
+      {isVerificationRoute && (
       <div className="portal-card">
         <div className="flex items-center justify-between gap-3 mb-4">
           <div>
@@ -667,8 +669,9 @@ export default function MeetingsPage() {
           </div>
         )}
       </div>
+      )}
 
-      {location.pathname !== "/verification-requests" && (
+      {!isVerificationRoute && (
       <form onSubmit={createEvent} className="bg-white rounded-2xl border border-slate-100 shadow-3d p-4 grid md:grid-cols-2 gap-3">
         <input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="Event title" className={inputClass} />
         <select value={form.eventType} onChange={(event) => setForm((current) => ({ ...current, eventType: event.target.value }))} className={inputClass}>
@@ -699,7 +702,7 @@ export default function MeetingsPage() {
       </form>
       )}
 
-      {location.pathname !== "/verification-requests" && (loading ? (
+      {!isVerificationRoute && (loading ? (
         <div className="text-sm text-slate-500 py-8 text-center">Loading calendar…</div>
       ) : (
         <div className="space-y-3">

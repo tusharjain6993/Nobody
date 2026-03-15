@@ -1,5 +1,4 @@
 import {
-  SignOutRegular,
   NavigationRegular,
   DataBarVerticalRegular,
   GavelRegular,
@@ -16,7 +15,7 @@ import { useHCMAuth } from "../minister/HCMAuthContext";
 function Sidebar({ collapsed, onToggle, onNavigate }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useHCMAuth();
+  const { user } = useHCMAuth();
   const userRole = user?.role || "citizen";
   const [verificationMenuOpen, setVerificationMenuOpen] = useState(false);
 
@@ -25,11 +24,6 @@ function Sidebar({ collapsed, onToggle, onNavigate }) {
       setVerificationMenuOpen(true);
     }
   }, [location.pathname, userRole]);
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
 
   const navItems = [
     ...(userRole === "admin" ? [
@@ -50,7 +44,7 @@ function Sidebar({ collapsed, onToggle, onNavigate }) {
       { to: "/my-cases", icon: GavelRegular, label: "Complaints" },
       { to: "/meetings", icon: CalendarLtrRegular, label: "Meetings" },
     ] : []),
-    { to: "/settings", icon: SettingsRegular, label: "Settings" },
+    { to: "/settings", icon: SettingsRegular, label: "Site Settings" },
   ];
 
   return (
@@ -62,10 +56,7 @@ function Sidebar({ collapsed, onToggle, onNavigate }) {
           </Link>
           {!collapsed && (
             <div className="portal-sidebar__brand">
-              <span className="portal-sidebar__brand-title">
-                {userRole === "citizen" ? "HCM Minister Office Portal" : "Ghar Ghar"}
-              </span>
-              {userRole !== "citizen" && <span className="portal-sidebar__brand-subtitle">HCM Minister Office Portal</span>}
+              <span className="portal-sidebar__brand-title">HCM Minister Office Portal</span>
             </div>
           )}
         </div>
@@ -107,13 +98,6 @@ function Sidebar({ collapsed, onToggle, onNavigate }) {
           />
         ))}
       </nav>
-
-      <div className="portal-sidebar__footer">
-        <button type="button" onClick={handleLogout} className="portal-sidebar__link portal-sidebar__logout" title={collapsed ? "Logout" : undefined}>
-          <span className="portal-sidebar__link-icon"><SignOutRegular /></span>
-          {!collapsed && <span>Logout</span>}
-        </button>
-      </div>
     </div>
   );
 }

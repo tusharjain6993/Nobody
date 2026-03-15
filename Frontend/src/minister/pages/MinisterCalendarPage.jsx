@@ -10,8 +10,6 @@ const TYPE_STYLES = {
 };
 const panelClass = "portal-card";
 const secondaryBtnClass = "portal-btn-secondary";
-const primaryBtnClass = "portal-btn";
-const inputClass = "portal-input";
 
 function startOfDay(date) {
   const d = new Date(date);
@@ -58,7 +56,7 @@ function EventPill({ item, compact = false, onClick }) {
   );
 }
 
-function Modal({ item, mode, editForm, setEditForm, onClose, onSave, onModeChange, saving }) {
+function Modal({ item, mode, onClose, onModeChange }) {
   if (!item) return null;
   return (
     <div className="fixed inset-0 bg-slate-950/45 backdrop-blur-[1px] z-50 flex items-start justify-center p-6 overflow-auto">
@@ -74,7 +72,6 @@ function Modal({ item, mode, editForm, setEditForm, onClose, onSave, onModeChang
 
         <div className="px-5 py-3 flex gap-2" style={{ borderBottom: "1px solid var(--border-secondary)" }}>
           <button type="button" onClick={() => onModeChange("details")} className={`portal-tab ${mode === "details" ? "portal-tab--active" : ""}`}>Details</button>
-          <button type="button" onClick={() => onModeChange("edit")} className={`portal-tab ${mode === "edit" ? "portal-tab--active" : ""}`}>Edit</button>
           <button type="button" onClick={() => onModeChange("files")} className={`portal-tab ${mode === "files" ? "portal-tab--active" : ""}`}>Files</button>
         </div>
 
@@ -108,29 +105,6 @@ function Modal({ item, mode, editForm, setEditForm, onClose, onSave, onModeChang
               )) : <div className="text-sm" style={{ color: "var(--text-tertiary)" }}>No files attached to this calendar item.</div>}
             </div>
           )}
-
-          {mode === "edit" && (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                onSave();
-              }}
-              className="space-y-3"
-            >
-              <input value={editForm.title} onChange={(event) => setEditForm((current) => ({ ...current, title: event.target.value }))} className={inputClass} placeholder="Title" />
-              <textarea value={editForm.details} onChange={(event) => setEditForm((current) => ({ ...current, details: event.target.value }))} rows={4} className="portal-textarea" placeholder="Description" />
-              <div className="grid grid-cols-2 gap-3">
-                <input type="datetime-local" value={editForm.startsAt} onChange={(event) => setEditForm((current) => ({ ...current, startsAt: event.target.value }))} className={inputClass} />
-                <input type="datetime-local" value={editForm.endsAt} onChange={(event) => setEditForm((current) => ({ ...current, endsAt: event.target.value }))} className={inputClass} />
-              </div>
-              <input value={editForm.location} onChange={(event) => setEditForm((current) => ({ ...current, location: event.target.value }))} className={inputClass} placeholder="Location" />
-              <div className="pt-2">
-                <button type="submit" disabled={saving} className={primaryBtnClass}>
-                  {saving ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </form>
-          )}
         </div>
       </div>
     </div>
@@ -145,8 +119,6 @@ export default function MinisterCalendarPage() {
   const [cursorDate, setCursorDate] = useState(startOfDay(new Date()));
   const [selectedItem, setSelectedItem] = useState(null);
   const [modalMode, setModalMode] = useState("details");
-  const [saving, setSaving] = useState(false);
-  const [editForm, setEditForm] = useState({ title: "", details: "", startsAt: "", endsAt: "", location: "" });
 
   useEffect(() => {
     let mounted = true;
@@ -190,14 +162,7 @@ export default function MinisterCalendarPage() {
 
   const openItem = (item, mode = "details") => {
     setSelectedItem(item);
-    setModalMode(mode);
-    setEditForm({
-      title: item.title || "",
-      details: item.details || "",
-      startsAt: item.startsAt?.slice(0, 16) || "",
-      endsAt: item.endsAt?.slice(0, 16) || "",
-      location: item.location || "",
-    });
+    setModalMode(mode === "edit" ? "details" : mode);
   };
 
   const shiftCursor = (direction) => {
@@ -206,34 +171,6 @@ export default function MinisterCalendarPage() {
     else if (view === "week") next.setDate(next.getDate() + direction * 7);
     else next.setDate(next.getDate() + direction);
     setCursorDate(startOfDay(next));
-  };
-
-  const saveEdit = async () => {
-    if (!selectedItem) return;
-    setSaving(true);
-    setError("");
-    try {
-      const res = await ministerViewApi.updateCalendarItem({
-        sourceKind: selectedItem.sourceKind,
-        sourceId: selectedItem.sourceId,
-        title: editForm.title,
-        details: editForm.details,
-        startsAt: editForm.startsAt,
-        endsAt: editForm.endsAt,
-        location: editForm.location,
-      });
-      setItems(res.calendarItems || []);
-      const updated = (res.calendarItems || []).find((item) => item.id === selectedItem.id);
-      if (updated) {
-        openItem(updated, "details");
-      } else {
-        setSelectedItem(null);
-      }
-    } catch (err) {
-      setError(err.message || "Failed to update calendar item");
-    } finally {
-      setSaving(false);
-    }
   };
 
   return (
@@ -361,12 +298,8 @@ export default function MinisterCalendarPage() {
       <Modal
         item={selectedItem}
         mode={modalMode}
-        editForm={editForm}
-        setEditForm={setEditForm}
         onClose={() => setSelectedItem(null)}
-        onSave={saveEdit}
         onModeChange={setModalMode}
-        saving={saving}
       />
     </div>
   );

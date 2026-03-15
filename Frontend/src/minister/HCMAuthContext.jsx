@@ -53,8 +53,13 @@ export function HCMAuthProvider({ children }) {
     setSessionExpiresAt("");
   };
 
+  const updateUser = (nextUserData) => {
+    localStorage.setItem("hcm_user", JSON.stringify(nextUserData));
+    setUser(nextUserData);
+  };
+
   return (
-    <HCMAuthContext.Provider value={{ user, token, sessionExpiresAt, login, logout, isAuthenticated: !!token && !!user }}>
+    <HCMAuthContext.Provider value={{ user, token, sessionExpiresAt, login, logout, updateUser, isAuthenticated: !!token && !!user }}>
       {children}
     </HCMAuthContext.Provider>
   );

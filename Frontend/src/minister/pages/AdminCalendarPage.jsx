@@ -94,9 +94,10 @@ function Modal({ item, mode, editForm, setEditForm, onClose, onSave, onModeChang
             >
               <input value={editForm.title} onChange={(event) => setEditForm((current) => ({ ...current, title: event.target.value }))} className={inputClass} placeholder="Title" />
               <textarea value={editForm.details} onChange={(event) => setEditForm((current) => ({ ...current, details: event.target.value }))} rows={4} className="portal-textarea" placeholder="Description" />
-              <div className="grid grid-cols-2 gap-3">
-                <input type="datetime-local" value={editForm.startsAt} onChange={(event) => setEditForm((current) => ({ ...current, startsAt: event.target.value }))} className={inputClass} />
-                <input type="datetime-local" value={editForm.endsAt} onChange={(event) => setEditForm((current) => ({ ...current, endsAt: event.target.value }))} className={inputClass} />
+              <div className="grid grid-cols-3 gap-3">
+                <input type="date" value={editForm.meetingDate} onChange={(event) => setEditForm((current) => ({ ...current, meetingDate: event.target.value }))} className={inputClass} />
+                <input type="time" value={editForm.startTime} onChange={(event) => setEditForm((current) => ({ ...current, startTime: event.target.value }))} className={inputClass} />
+                <input type="time" value={editForm.endTime} onChange={(event) => setEditForm((current) => ({ ...current, endTime: event.target.value }))} className={inputClass} />
               </div>
               <input value={editForm.location} onChange={(event) => setEditForm((current) => ({ ...current, location: event.target.value }))} className={inputClass} placeholder="Location" />
               <div className="pt-2">
@@ -121,7 +122,7 @@ export default function AdminCalendarPage() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [modalMode, setModalMode] = useState("details");
   const [saving, setSaving] = useState(false);
-  const [editForm, setEditForm] = useState({ title: "", details: "", startsAt: "", endsAt: "", location: "" });
+  const [editForm, setEditForm] = useState({ title: "", details: "", meetingDate: "", startTime: "", endTime: "", location: "" });
 
   useEffect(() => {
     let mounted = true;
@@ -164,13 +165,16 @@ export default function AdminCalendarPage() {
   );
 
   const openItem = (item, mode = "details") => {
+    const start = item.startsAt ? new Date(item.startsAt) : null;
+    const end = item.endsAt ? new Date(item.endsAt) : null;
     setSelectedItem(item);
     setModalMode(mode);
     setEditForm({
       title: item.title || "",
       details: item.details || "",
-      startsAt: item.startsAt?.slice(0, 16) || "",
-      endsAt: item.endsAt?.slice(0, 16) || "",
+      meetingDate: item.startsAt?.slice(0, 10) || "",
+      startTime: start ? `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}` : "",
+      endTime: end ? `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}` : "",
       location: item.location || "",
     });
   };
@@ -192,8 +196,8 @@ export default function AdminCalendarPage() {
         sourceId: selectedItem.sourceId,
         title: editForm.title,
         details: editForm.details,
-        startsAt: editForm.startsAt,
-        endsAt: editForm.endsAt,
+        startsAt: `${editForm.meetingDate}T${editForm.startTime}`,
+        endsAt: `${editForm.meetingDate}T${editForm.endTime}`,
         location: editForm.location,
       });
       setItems(res.calendarItems || []);

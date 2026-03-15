@@ -6,6 +6,7 @@ import MainLayout from "./Components/MainLayout";
 import ProtectedRoute from "./Components/ProtectedRoute";
 import DashboardPage from "./Components/pages/MinisterDashboard/MinisterDashboard";
 import SettingsPage from "./Components/pages/SettingsPage";
+import ProfileSettingsPage from "./Components/pages/ProfileSettingsPage";
 
 import HCMLoginPage from "./minister/pages/HCMLoginPage";
 import HCMRegisterPage from "./minister/pages/HCMRegisterPage";
@@ -117,6 +118,10 @@ function App() {
                 <MeetingsPage />
               </ProtectedRoute>
             )}
+          />
+          <Route
+            path="/profile-settings"
+            element={<ProfileSettingsPage />}
           />
           <Route
             path="/new-case"

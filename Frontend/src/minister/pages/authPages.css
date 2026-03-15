@@ -9,6 +9,26 @@
   background: var(--bg-app-gradient);
 }
 
+.auth-page--dark-only {
+  --bg-app-gradient: radial-gradient(circle at top right, rgba(59, 130, 246, 0.16), transparent 28%), radial-gradient(circle at bottom left, rgba(139, 92, 246, 0.14), transparent 28%), linear-gradient(180deg, #0b0e14 0%, #101827 100%);
+  --bg-primary: #111827;
+  --bg-secondary: #1a1f2e;
+  --bg-tertiary: #242a3b;
+  --bg-glass: rgba(17, 24, 39, 0.78);
+  --bg-glass-border: rgba(255, 255, 255, 0.08);
+  --border-primary: #273246;
+  --input-bg: #182133;
+  --input-border: #31405b;
+  --input-border-hover: #44557a;
+  --input-border-focus: #7c8cff;
+  --input-placeholder: #7b8aa5;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --shadow-lg: 0 24px 60px rgba(2, 6, 23, 0.5);
+  color-scheme: dark;
+}
+
 .auth-page__blur1,
 .auth-page__blur2 {
   position: fixed;

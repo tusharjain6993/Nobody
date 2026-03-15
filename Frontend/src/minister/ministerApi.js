@@ -22,6 +22,12 @@ function localTimePart(value) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+function plusMinutes(timeValue, minutesToAdd = 30) {
+  const [hours, minutes] = String(timeValue || "09:00").split(":").map((part) => Number(part || 0));
+  const totalMinutes = (hours * 60) + minutes + minutesToAdd;
+  return `${String(Math.floor(totalMinutes / 60) % 24).padStart(2, "0")}:${String(totalMinutes % 60).padStart(2, "0")}`;
+}
+
 function parseJson(value, fallback) {
   if (!value) return fallback;
   try {
@@ -180,6 +186,27 @@ function buildSessionPayload(user) {
       profileCompletion,
       lastLoginAt: user.lastLoginAt || "",
     },
+  };
+}
+
+function buildProfileSettingsPayload(user) {
+  return {
+    id: String(user.id),
+    profileId: `${String(user.role || "user").toUpperCase()}-${String(user.id).padStart(4, "0")}`,
+    name: user.name || "",
+    email: user.email || "",
+    role: user.role || "",
+    department: user.department || "",
+    citizenId: user.citizenId || "",
+    phonePrimary: user.phonePrimary || parseJson(user.phoneNumbers, [])[0] || "",
+    age: user.age || "",
+    gender: user.gender || "",
+    pinCode: user.pinCode || "",
+    state: user.state || "",
+    city: user.city || "",
+    mpName: user.mpName || "",
+    aadhaarMasked: maskAadhaar(user.aadhaar || ""),
+    profileCompletion: user.role === "citizen" ? getProfileCompletion(user) : null,
   };
 }
 
@@ -350,6 +377,7 @@ function buildMeetingCalendarDetails(meeting) {
     `Meeting type: ${meeting.priority === "VIP" ? "VIP" : "Standard"}`,
     `Visitor ID: ${meeting.visitorId || "Pending"}`,
     `Docket: ${meeting.meetingDocket || "Pending"}`,
+    `Time: ${meeting.scheduleTime || "09:00"} - ${meeting.scheduleEndTime || plusMinutes(meeting.scheduleTime || "09:00")}`,
   ];
   if (meeting.adminNotes) parts.push(meeting.adminNotes);
   return parts.join(" · ");
@@ -454,7 +482,7 @@ function buildCaseSummaryRows(itemType, item) {
   if (itemType === "meeting") {
     rows.push(["Purpose", item.purpose || ""]);
     rows.push(["Meeting type", item.priority === "VIP" ? "VIP" : "Standard"]);
-    rows.push(["Schedule", item.scheduleDate ? `${item.scheduleDate} ${item.scheduleTime || ""}` : "Pending"]);
+    rows.push(["Schedule", item.scheduleDate ? `${item.scheduleDate} ${item.scheduleTime || ""}-${item.scheduleEndTime || plusMinutes(item.scheduleTime || "09:00")}` : "Pending"]);
     rows.push(["Location", item.scheduleLocation || ""]);
     rows.push(["Execution status", item.executionStatusLabel || "Pending"]);
   } else {
@@ -585,6 +613,77 @@ export const adminDirectoryApi = {
   },
 };
 
+export const profileApi = {
+  getCurrent: async () => {
+    await getDb();
+    const currentUser = requireUser();
+    const row = queryOne("SELECT * FROM users WHERE id = ?", [Number(currentUser.id)]);
+    if (!row) throw new Error("Profile not found");
+    return {
+      profile: buildProfileSettingsPayload(row),
+      sessionUser: buildSessionPayload(row).user,
+    };
+  },
+
+  updateCurrent: async (payload = {}) => {
+    await getDb();
+    const currentUser = requireUser();
+    const row = queryOne("SELECT * FROM users WHERE id = ?", [Number(currentUser.id)]);
+    if (!row) throw new Error("Profile not found");
+
+    const name = String(payload.name || "").trim();
+    const email = String(payload.email || "").trim().toLowerCase();
+    const department = String(payload.department || "").trim();
+    const phonePrimary = String(payload.phonePrimary || "").replace(/\D/g, "").slice(0, 10);
+    const age = payload.age === "" || payload.age == null ? null : Number(payload.age);
+    const gender = String(payload.gender || "").trim();
+    const pinCode = String(payload.pinCode || "").replace(/\D/g, "").slice(0, 6);
+    const state = String(payload.state || "").trim();
+    const city = String(payload.city || "").trim();
+    const mpName = String(payload.mpName || "").trim();
+
+    if (!name) throw new Error("Name is required");
+    if (!email) throw new Error("Email is required");
+    const existingEmail = queryOne("SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id <> ?", [email, Number(row.id)]);
+    if (existingEmail) throw new Error("Another user already has this email address");
+    if (phonePrimary && !/^[6-9]\d{9}$/.test(phonePrimary)) throw new Error("Phone number must be a valid 10-digit mobile number");
+
+    if (row.role === "citizen") {
+      if (age !== null && (!Number.isInteger(age) || age < 18 || age > 120)) throw new Error("Age must be between 18 and 120");
+      if (!gender) throw new Error("Gender is required");
+      if (pinCode && !/^\d{6}$/.test(pinCode)) throw new Error("PIN code must be exactly 6 digits");
+    }
+
+    const phones = phonePrimary ? [phonePrimary] : [];
+    execute(
+      `UPDATE users
+       SET name=?, email=?, phonePrimary=?, phoneNumbers=?, age=?, gender=?, pinCode=?, state=?, city=?, mpName=?, department=?, updatedAt=?
+       WHERE id=?`,
+      [
+        name,
+        email,
+        phonePrimary,
+        JSON.stringify(phones),
+        age,
+        gender,
+        pinCode,
+        state,
+        city,
+        mpName,
+        row.role === "citizen" ? "" : department,
+        ts(),
+        Number(row.id),
+      ]
+    );
+
+    const updated = queryOne("SELECT * FROM users WHERE id = ?", [Number(row.id)]);
+    return {
+      profile: buildProfileSettingsPayload(updated),
+      sessionUser: buildSessionPayload(updated).user,
+    };
+  },
+};
+
 export const citizenApi = {
   createMeetingRequest: async (body) => {
     await getDb();
@@ -602,8 +701,8 @@ export const citizenApi = {
     const requestId = nextCode("MREQ", "meeting_requests");
     execute(
       `INSERT INTO meeting_requests (
-        requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,attachments,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleLocation,priority,priorityReason,visitorId,meetingDocket,adminNotes,statusReason,executionStatus,escalatedFromComplaintId,createdAt,updatedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,attachments,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleEndTime,scheduleLocation,priority,priorityReason,visitorId,meetingDocket,adminNotes,statusReason,executionStatus,escalatedFromComplaintId,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         requestId,
         Number(user.id),
@@ -616,6 +715,7 @@ export const citizenApi = {
         body.attachments?.[0]?.type || body.attachment?.type || "",
         body.attachments?.[0]?.data || body.attachment?.data || "",
         "submitted",
+        "",
         "",
         "",
         "",
@@ -836,20 +936,22 @@ export const workItemsApi = {
     assertMeetingTransition(row, ["under_review", "approved", "scheduled"], "Only verification-completed, approved, or already scheduled meetings can be scheduled or rescheduled");
     const date = String(payload.scheduleDate || "").trim();
     const time = String(payload.scheduleTime || "").trim();
+    const endTime = String(payload.scheduleEndTime || plusMinutes(time)).trim();
     const location = String(payload.scheduleLocation || "").trim();
     const adminNotes = String(payload.adminNotes || row.adminNotes || "").trim();
     const isVip = !!payload.isVip;
-    if (!date || !time || !location) throw new Error("Date, time, and location are required");
+    if (!date || !time || !endTime || !location) throw new Error("Date, start time, end time, and location are required");
     updateMeetingOwnership(row, user);
     const visitorId = row.visitorId || `VIS-${new Date().getFullYear()}-${String(id).padStart(4, "0")}`;
     const meetingDocket = row.meetingDocket || `DOC-${new Date().getFullYear()}-${String(id).padStart(4, "0")}`;
     execute(
       `UPDATE meeting_requests
-       SET status='scheduled', scheduleDate=?, scheduleTime=?, scheduleLocation=?, priority=?, priorityReason='', visitorId=?, meetingDocket=?, adminNotes=?, statusReason=?, executionStatus='pending', updatedAt=?
+       SET status='scheduled', scheduleDate=?, scheduleTime=?, scheduleEndTime=?, scheduleLocation=?, priority=?, priorityReason='', visitorId=?, meetingDocket=?, adminNotes=?, statusReason=?, executionStatus='pending', updatedAt=?
        WHERE id=?`,
       [
         date,
         time,
+        endTime,
         location,
         isVip ? "VIP" : "",
         visitorId,
@@ -861,7 +963,7 @@ export const workItemsApi = {
       ]
     );
     const updated = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
-    addLog("meeting_request", id, row.status === "scheduled" ? "Meeting rescheduled" : "Meeting scheduled", `${date} ${time} at ${location}`, user);
+    addLog("meeting_request", id, row.status === "scheduled" ? "Meeting rescheduled" : "Meeting scheduled", `${date} ${time}-${endTime} at ${location}`, user);
     addNotificationForUsers([updated.citizenId], "Calendar Update", `Your meeting ${updated.requestId} has been scheduled. Download your meeting pass from the Meetings page.`, "/meetings");
     addNotificationForUsers(
       getAdminUsers().map((admin) => admin.id),
@@ -1089,8 +1191,8 @@ export const workItemsApi = {
     const requestId = nextCode("MREQ", "meeting_requests");
     execute(
       `INSERT INTO meeting_requests (
-        requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,assignedAdminUserId,assignedAdminName,attachments,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleLocation,priority,priorityReason,visitorId,meetingDocket,adminNotes,statusReason,executionStatus,escalatedFromComplaintId,createdAt,updatedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,assignedAdminUserId,assignedAdminName,attachments,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleEndTime,scheduleLocation,priority,priorityReason,visitorId,meetingDocket,adminNotes,statusReason,executionStatus,escalatedFromComplaintId,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         requestId,
         complaint.citizenId,
@@ -1102,6 +1204,7 @@ export const workItemsApi = {
         user.name,
         JSON.stringify([]),
         "submitted",
+        "",
         "",
         "",
         "",
@@ -1316,6 +1419,20 @@ export const ministerViewApi = {
     const complaints = queryAll("SELECT * FROM complaints").map(buildComplaint);
     const analytics = buildAnalytics(events, complaints, scheduledMeetings);
     const operations = buildOperationalMetrics(complaints, queryAll("SELECT * FROM meeting_requests").map(buildMeetingRequest));
+    const complaintOverview = {
+      received: complaints.length,
+      resolved: complaints.filter((item) => ["resolved", "completed"].includes(item.status)).length,
+      pending: complaints.filter((item) => !["resolved", "completed"].includes(item.status)).length,
+    };
+    const meetingCountsByDate = scheduledMeetings.reduce((acc, meeting) => {
+      const key = meeting.scheduleDate || "TBD";
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const meetingsHeldSeries = Object.entries(meetingCountsByDate)
+      .map(([date, count]) => ({ date, count, target: Math.max(count + 1, 2) }))
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .slice(-10);
     const upcomingAgenda = [
       ...events.map((event) => ({
         id: `event-${event._id}`,
@@ -1334,6 +1451,38 @@ export const ministerViewApi = {
     ]
       .sort((a, b) => new Date(a.when) - new Date(b.when))
       .slice(0, 8);
+    const vipMeetingsAndEvents = [
+      ...scheduledMeetings.map((meeting) => ({
+        id: `meeting-${meeting._id}`,
+        label: meeting.purpose,
+        date: `${meeting.scheduleDate} ${meeting.scheduleTime || ""}`.trim(),
+        type: "VIP Meeting",
+        status: "Scheduled",
+      })),
+      ...events.map((event) => ({
+        id: `event-${event._id}`,
+        label: event.title,
+        date: event.scheduleAt,
+        type: "Event",
+        status: event.attendanceStatus === "attended" ? "Attended" : "Scheduled",
+      })),
+    ]
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .slice(0, 8);
+    const recentComplaints = [...complaints]
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0))
+      .slice(0, 8)
+      .map((item) => ({
+        id: item._id,
+        citizenName: item.citizenSnapshot?.name || "Citizen",
+        date: item.createdAt,
+        department: item.department || "Complaint Desk",
+        category: item.complaintType || "General",
+        description: item.details || item.title || "",
+        city: item.citizenSnapshot?.city || item.complaintLocation || "N/A",
+        status: item.status,
+        statusLabel: item.statusLabel,
+      }));
 
     return {
       analytics,
@@ -1343,6 +1492,10 @@ export const ministerViewApi = {
       scheduledMeetings: scheduledMeetings.length,
       invitedEvents: events.filter((event) => event.eventType === "Invited Event").length,
       upcomingAgenda,
+      complaintOverview,
+      meetingsHeldSeries,
+      vipMeetingsAndEvents,
+      recentComplaints,
     };
   },
 
@@ -1350,7 +1503,16 @@ export const ministerViewApi = {
     await getDb();
     requireRole("minister");
     const events = queryAll("SELECT * FROM calendar_events ORDER BY scheduleAt DESC").map(buildCalendarEvent);
-    const meetings = queryAll("SELECT * FROM meeting_requests WHERE status='scheduled' AND priority IN ('VIP','HIGH') AND executionStatus='pending' ORDER BY scheduleDate ASC, scheduleTime ASC").map(buildMeetingRequest);
+    const meetings = queryAll(
+      `SELECT * FROM meeting_requests
+       WHERE status='scheduled'
+         AND priority IN ('VIP','HIGH')
+         AND executionStatus='pending'
+         AND COALESCE(scheduleDate,'') != ''
+         AND COALESCE(scheduleTime,'') != ''
+         AND COALESCE(scheduleLocation,'') != ''
+       ORDER BY scheduleDate ASC, scheduleTime ASC`
+    ).map(buildMeetingRequest);
     const calendarItems = [
       ...events.map((event) => ({
         id: `event-${event._id}`,
@@ -1374,12 +1536,12 @@ export const ministerViewApi = {
         details: buildMeetingCalendarDetails(meeting),
         type: "Minister Meeting",
         startsAt: `${meeting.scheduleDate}T${meeting.scheduleTime || "09:00"}`,
-        endsAt: `${meeting.scheduleDate}T${meeting.scheduleTime || "09:30"}`,
+        endsAt: `${meeting.scheduleDate}T${meeting.scheduleEndTime || plusMinutes(meeting.scheduleTime || "09:00")}`,
         location: meeting.scheduleLocation || "",
         source: "Approved Meeting Request",
         videoLink: "",
         files: meeting.attachment ? [meeting.attachment] : [],
-      })),
+      })).filter((meeting) => meeting.startsAt && !String(meeting.details || "").toLowerCase().includes("verification")),
     ].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
 
     return { calendarItems };
@@ -1388,47 +1550,7 @@ export const ministerViewApi = {
   updateCalendarItem: async (payload) => {
     await getDb();
     requireRole("minister");
-    const sourceKind = payload?.sourceKind;
-    const sourceId = Number(payload?.sourceId || 0);
-    if (!sourceKind || !sourceId) throw new Error("Calendar item reference is required");
-
-    if (sourceKind === "deo_event") {
-      execute(
-        `UPDATE calendar_events
-         SET title=?, details=?, scheduleAt=?, endAt=?, department=?, updatedAt=?
-         WHERE id=?`,
-        [
-          String(payload.title || "").trim(),
-          String(payload.details || "").trim(),
-          String(payload.startsAt || "").trim(),
-          String(payload.endsAt || "").trim(),
-          String(payload.location || "").trim(),
-          ts(),
-          sourceId,
-        ]
-      );
-    } else if (sourceKind === "minister_meeting") {
-      const startsAt = new Date(payload.startsAt);
-      if (Number.isNaN(startsAt.getTime())) throw new Error("A valid meeting start time is required");
-      execute(
-        `UPDATE meeting_requests
-         SET purpose=?, scheduleDate=?, scheduleTime=?, scheduleLocation=?, adminNotes=?, updatedAt=?
-         WHERE id=?`,
-        [
-          String(payload.title || "").trim(),
-          localDatePart(startsAt),
-          localTimePart(startsAt),
-          String(payload.location || "").trim(),
-          String(payload.details || "").trim(),
-          ts(),
-          sourceId,
-        ]
-      );
-    } else {
-      throw new Error("Unsupported calendar item type");
-    }
-
-    return ministerViewApi.calendar();
+    throw new Error("Minister calendar is read-only");
   },
 };
 
@@ -1449,7 +1571,7 @@ export const adminViewApi = {
       details: buildMeetingCalendarDetails(meeting),
       type: "Scheduled Meeting",
       startsAt: `${meeting.scheduleDate}T${meeting.scheduleTime || "09:00"}`,
-      endsAt: `${meeting.scheduleDate}T${meeting.scheduleTime || "09:30"}`,
+      endsAt: `${meeting.scheduleDate}T${meeting.scheduleEndTime || plusMinutes(meeting.scheduleTime || "09:00")}`,
       location: meeting.scheduleLocation || "",
       source: "My Scheduled Meetings",
     }));
@@ -1468,15 +1590,20 @@ export const adminViewApi = {
       throw new Error("You can only edit meetings in your own calendar");
     }
     const startsAt = new Date(payload.startsAt);
+    const endsAt = new Date(payload.endsAt);
     if (Number.isNaN(startsAt.getTime())) throw new Error("A valid meeting start time is required");
+    if (Number.isNaN(endsAt.getTime())) throw new Error("A valid meeting end time is required");
+    if (localDatePart(startsAt) !== localDatePart(endsAt)) throw new Error("Meetings cannot span multiple dates");
+    if (endsAt <= startsAt) throw new Error("Meeting end time must be after the start time");
     execute(
       `UPDATE meeting_requests
-       SET purpose=?, scheduleDate=?, scheduleTime=?, scheduleLocation=?, adminNotes=?, updatedAt=?
+       SET purpose=?, scheduleDate=?, scheduleTime=?, scheduleEndTime=?, scheduleLocation=?, adminNotes=?, updatedAt=?
        WHERE id=?`,
       [
         String(payload.title || "").trim(),
         localDatePart(startsAt),
         localTimePart(startsAt),
+        localTimePart(endsAt),
         String(payload.location || "").trim(),
         String(payload.details || "").trim(),
         ts(),

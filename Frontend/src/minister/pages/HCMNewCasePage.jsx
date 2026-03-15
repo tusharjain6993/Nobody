@@ -113,7 +113,7 @@ export default function HCMNewCasePage() {
       />
       <div className="portal-page__hero">
         <div className="portal-page__eyebrow">Citizen Services</div>
-        <h1 className="portal-page__title">Citizen Service Router</h1>
+        <h1 className="portal-page__title">Citizen Services</h1>
         <p className="portal-page__desc">
           Choose exactly one service path: request a meeting with an admin desk or submit a complaint into the common complaint pool.
         </p>

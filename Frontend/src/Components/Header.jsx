@@ -115,7 +115,6 @@ const Header = ({ onOpenMobileNav }) => {
           <NavigationRegular />
         </button>
         <div>
-          <div className="portal-topbar__eyebrow">Nobody-1 Portal</div>
           <div className="portal-topbar__title">{pageTitle}</div>
         </div>
       </div>
@@ -161,7 +160,7 @@ const Header = ({ onOpenMobileNav }) => {
               </div>
             </div>
             <div className="py-1">
-              <MenuItem icon={SettingsRegular} label="Settings" onClick={() => { navigate("/settings"); setOpen(false); }} />
+              <MenuItem icon={SettingsRegular} label="Profile Settings" onClick={() => { navigate("/profile-settings"); setOpen(false); }} />
               <MenuItem icon={SignOutRegular} label="Logout" danger onClick={handleLogout} />
             </div>
           </div>
