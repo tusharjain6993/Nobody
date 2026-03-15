@@ -19,8 +19,8 @@ import {
   CheckmarkCircleRegular,
   StarRegular,
 } from "@fluentui/react-icons";
-import { useNavigate } from "react-router-dom";
 import { ministerViewApi } from "../ministerApi";
+import { downloadExecutiveBriefPdf } from "../../utils/executiveBrief";
 
 const ACCENT = "#5B4FE9";
 const PIE_COLORS = ["#5B4FE9", "#7C72F2", "#D9D6FF"];
@@ -168,7 +168,6 @@ function FilterPill({ active, label, onClick }) {
 }
 
 export default function MinisterDashboardPage() {
-  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -262,6 +261,37 @@ export default function MinisterDashboardPage() {
     });
   }, [data, vipWindow]);
 
+  const upcomingExecutiveItems = useMemo(() => {
+    const now = new Date();
+    return [...(data?.vipMeetingsAndEvents || [])]
+      .map((item) => {
+        const itemDate = new Date(item.date);
+        return {
+          ...item,
+          itemDate,
+        };
+      })
+      .filter((item) => !Number.isNaN(item.itemDate.getTime()) && item.itemDate >= now)
+      .sort((a, b) => a.itemDate.getTime() - b.itemDate.getTime())
+      .slice(0, 3)
+      .map((item) => ({
+        label: item.label,
+        type: item.type,
+        date: item.itemDate.toLocaleDateString(),
+        time: item.time || "-",
+        location: item.location || "-",
+        status: item.status || "Scheduled",
+      }));
+  }, [data]);
+
+  function handleDownloadExecutiveBrief() {
+    downloadExecutiveBriefPdf({
+      filename: "minister-executive-brief.pdf",
+      generatedFor: data?.profile?.name || "Minister",
+      items: upcomingExecutiveItems,
+    });
+  }
+
   return (
     <div className="minister-dashboard" style={{ background: TOKENS.bgApp, minHeight: "100%", padding: "1.5rem", color: TOKENS.textPrimary }}>
       {error && <div className="portal-alert portal-alert--error" style={{ marginBottom: "1rem" }}>{error}</div>}
@@ -279,7 +309,7 @@ export default function MinisterDashboardPage() {
           <div style={{ fontSize: "1.4rem", fontWeight: 800, marginTop: "0.3rem" }}>This month&apos;s governance pulse is ready for review.</div>
           <div style={{ fontSize: "0.88rem", opacity: 0.88, marginTop: "0.35rem" }}>Track meetings, complaints, events, and productivity from one consolidated view.</div>
         </div>
-        <button type="button" onClick={() => navigate("/minister/calendar")} style={{ border: "none", borderRadius: 999, padding: "0.75rem 1.2rem", fontWeight: 700, background: "#FFFFFF", color: ACCENT, cursor: "pointer" }}>
+        <button type="button" onClick={handleDownloadExecutiveBrief} style={{ border: "none", borderRadius: 999, padding: "0.75rem 1.2rem", fontWeight: 700, background: "#FFFFFF", color: ACCENT, cursor: "pointer" }}>
           View Executive Brief
         </button>
       </div>
