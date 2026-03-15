@@ -82,9 +82,9 @@ export default function MeetingsPage() {
   const [photos, setPhotos] = useState([]);
   const [documents, setDocuments] = useState([]);
   const routePriority = String(searchParams.get("priority") || "").toUpperCase();
-  const activeVerificationPriority = VERIFICATION_PRIORITY_OPTIONS.includes(routePriority) ? routePriority : "CRITICAL";
+  const activeVerificationPriority = VERIFICATION_PRIORITY_OPTIONS.includes(routePriority) ? routePriority : "";
   const filteredVerificationRequests = [...verificationRequests]
-    .filter((request) => String(request.priority || "").toUpperCase() === activeVerificationPriority)
+    .filter((request) => !activeVerificationPriority || String(request.priority || "").toUpperCase() === activeVerificationPriority)
     .filter((request) => {
       const q = verificationSearch.trim().toLowerCase();
       if (!q) return true;

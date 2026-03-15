@@ -13,8 +13,6 @@ import {
 import { useEffect, useState } from "react";
 import { useNavigate, Link, NavLink, useLocation } from "react-router-dom";
 import { useHCMAuth } from "../minister/HCMAuthContext";
-import { getRoleLabel } from "../constants/adminWorkflow";
-
 function Sidebar({ collapsed, onToggle, onNavigate }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -64,8 +62,10 @@ function Sidebar({ collapsed, onToggle, onNavigate }) {
           </Link>
           {!collapsed && (
             <div className="portal-sidebar__brand">
-              <span className="portal-sidebar__brand-title">Ghar Ghar</span>
-              <span className="portal-sidebar__brand-subtitle">HCM Minister Office Portal</span>
+              <span className="portal-sidebar__brand-title">
+                {userRole === "citizen" ? "HCM Minister Office Portal" : "Ghar Ghar"}
+              </span>
+              {userRole !== "citizen" && <span className="portal-sidebar__brand-subtitle">HCM Minister Office Portal</span>}
             </div>
           )}
         </div>
@@ -74,15 +74,17 @@ function Sidebar({ collapsed, onToggle, onNavigate }) {
         </button>
       </div>
 
-      <div className="portal-sidebar__user">
-        <div className="portal-sidebar__avatar">{user?.name?.[0]?.toUpperCase() || "U"}</div>
-        {!collapsed && user && (
-          <div className="portal-sidebar__user-text">
-            <div className="portal-sidebar__user-name">{user.name}</div>
-            <div className="portal-sidebar__user-role">{getRoleLabel(user.role)}</div>
-          </div>
-        )}
-      </div>
+      {userRole !== "citizen" && (
+        <div className="portal-sidebar__user">
+          <div className="portal-sidebar__avatar">{user?.name?.[0]?.toUpperCase() || "U"}</div>
+          {!collapsed && user && (
+            <div className="portal-sidebar__user-text">
+              <div className="portal-sidebar__user-name">{user.name}</div>
+              <div className="portal-sidebar__user-role">{user.role}</div>
+            </div>
+          )}
+        </div>
+      )}
 
       <nav className="portal-sidebar__nav hide-scroll">
         <div className="portal-sidebar__section-label">{!collapsed ? "Navigation" : ""}</div>

@@ -760,7 +760,7 @@ export const workItemsApi = {
     }
     updateMeetingOwnership(row, user);
     execute(
-      "UPDATE meeting_requests SET status='verification_needed', priority=?, adminNotes=?, statusReason=?, updatedAt=? WHERE id=?",
+      "UPDATE meeting_requests SET status='verification_needed', priority=?, verificationOutcome='', adminNotes=?, statusReason=?, updatedAt=? WHERE id=?",
       [
         verificationPriority,
         notes || row.adminNotes || "",
@@ -777,7 +777,7 @@ export const workItemsApi = {
       getDeoUsers().map((deo) => deo.id),
       "Verification Needed",
       `${humanizePriority(verificationPriority)} priority: call citizen ${snapshot.citizenId || "Unknown"} on ${phone} for meeting ${updated?.requestId || ""}.`,
-      `/verification-requests`
+      `/verification-requests?priority=${verificationPriority}`
     );
     return workItemsApi.getMeetingRequest(id);
   },
@@ -815,7 +815,7 @@ export const workItemsApi = {
     updateMeetingOwnership(row, user);
     execute(
       `UPDATE meeting_requests
-       SET status='approved', statusReason=?, updatedAt=?
+       SET status='approved', verificationOutcome='', statusReason=?, updatedAt=?
        WHERE id=?`,
       [
         "Approved by admin and waiting for DEO verification before scheduling.",
@@ -905,7 +905,7 @@ export const workItemsApi = {
     const notes = String(reason || "").trim();
     if (!notes) throw new Error("A reason is required to revert approval");
     execute(
-      "UPDATE meeting_requests SET status='submitted', statusReason=?, updatedAt=? WHERE id=?",
+      "UPDATE meeting_requests SET status='submitted', verificationOutcome='', statusReason=?, updatedAt=? WHERE id=?",
       [notes, ts(), Number(id)]
     );
     addLog("meeting_request", id, "Approval reverted", notes, user);
