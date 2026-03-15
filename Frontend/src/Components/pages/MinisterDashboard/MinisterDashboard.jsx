@@ -129,12 +129,12 @@ function MinisterDashboard() {
     <div className="p-6 h-full space-y-6 bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
       {error && <div className="text-xs md:text-sm text-red-600 font-medium bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
 
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      {/* <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
           <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-slate-50">{user?.name ? `Good day, ${user.name}` : "Admin Dashboard"}</h1>
           <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">Daily, weekly, and monthly productivity drawn from attended events, complaint decisions, and scheduled meetings.</p>
         </div>
-      </div>
+      </div> */}
 
       <ProjectTaskCards stats={stats} />
 
