@@ -107,7 +107,7 @@ export default function HCMCasesListPage() {
 
   return (
     <div className="portal-page">
-      <div className="portal-toolbar">
+      {/* <div className="portal-toolbar">
         <div>
           <div className="portal-page__eyebrow">Admin Console</div>
           <h1 className="text-3xl font-bold mb-1" style={{ color: "var(--text-primary)" }}>Admin Work Queue</h1>
@@ -115,7 +115,7 @@ export default function HCMCasesListPage() {
             Structured retrieval is enabled here. Filter by workflow status, citizen ID, request/complaint ID, and free text without leaving the queue.
           </p>
         </div>
-      </div>
+      </div> */}
 
       <div className="portal-tabs">
         {[

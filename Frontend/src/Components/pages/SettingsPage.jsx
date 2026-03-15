@@ -243,12 +243,6 @@ export default function SettingsPage() {
 
   return (
     <div className="portal-page">
-      <div>
-        <div className="portal-page__eyebrow">Preferences</div>
-        <h1 className="portal-page__title" style={{ fontSize: "2.5rem" }}>Site Settings</h1>
-        <p className="portal-page__desc">Manage appearance, notification preferences, demo data tools, and site-level behavior.</p>
-      </div>
-
       <div className="settings-page">
         <aside className="settings-nav">
           {SECTIONS.map((section) => {
