@@ -166,7 +166,7 @@ export default function HCMCasesListPage() {
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                     <h3 className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>{item.title || item.purpose}</h3>
                     <span className="portal-chip" style={{ background: "var(--accent-primary-subtle)", color: "var(--accent-primary)" }}>{item.complaintId || item.requestId}</span>
-                    {(item.priority === "VIP" || item.priority === "HIGH") && <span className="portal-chip">VIP Meeting</span>}
+                    {item.priority === "VIP" && <span className="portal-chip">VIP Meeting</span>}
                   </div>
                   <div className="portal-meta">
                     <span>{item.citizenSnapshot?.name} · {item.citizenSnapshot?.citizenId}</span>

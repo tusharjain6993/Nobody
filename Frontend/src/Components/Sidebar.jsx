@@ -6,15 +6,27 @@ import {
   DocumentAddRegular,
   SettingsRegular,
   CalendarLtrRegular,
+  BuildingBankRegular,
+  ChevronDownRegular,
+  ChevronRightRegular,
 } from "@fluentui/react-icons";
-import { useNavigate, Link, NavLink } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, Link, NavLink, useLocation } from "react-router-dom";
 import { useHCMAuth } from "../minister/HCMAuthContext";
 import { getRoleLabel } from "../constants/adminWorkflow";
 
 function Sidebar({ collapsed, onToggle, onNavigate }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useHCMAuth();
   const userRole = user?.role || "citizen";
+  const [verificationMenuOpen, setVerificationMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (userRole === "deo" && location.pathname === "/verification-requests") {
+      setVerificationMenuOpen(true);
+    }
+  }, [location.pathname, userRole]);
 
   const handleLogout = () => {
     logout();
@@ -33,7 +45,6 @@ function Sidebar({ collapsed, onToggle, onNavigate }) {
       { to: "/minister/calendar", icon: CalendarLtrRegular, label: "Calendar" },
     ] : []),
     ...(userRole === "deo" ? [
-      { to: "/verification-requests", icon: GavelRegular, label: "Verification Requests" },
       { to: "/meetings", icon: CalendarLtrRegular, label: "Calendar" },
     ] : []),
     ...(userRole === "citizen" ? [
@@ -49,7 +60,7 @@ function Sidebar({ collapsed, onToggle, onNavigate }) {
       <div className="portal-sidebar__header">
         <div className="portal-sidebar__logo">
           <Link to="/" className="portal-sidebar__logo-mark" onClick={onNavigate} aria-label="HCM Portal home">
-            <span aria-hidden="true">🏛️</span>
+            <BuildingBankRegular />
           </Link>
           {!collapsed && (
             <div className="portal-sidebar__brand">
@@ -75,6 +86,14 @@ function Sidebar({ collapsed, onToggle, onNavigate }) {
 
       <nav className="portal-sidebar__nav hide-scroll">
         <div className="portal-sidebar__section-label">{!collapsed ? "Navigation" : ""}</div>
+        {userRole === "deo" && (
+          <DeoVerificationMenu
+            collapsed={collapsed}
+            open={verificationMenuOpen}
+            onToggle={() => setVerificationMenuOpen((current) => !current)}
+            onNavigate={onNavigate}
+          />
+        )}
         {navItems.map(({ to, icon: Icon, label }) => (
           <LinkWrapper
             key={to}
@@ -93,6 +112,55 @@ function Sidebar({ collapsed, onToggle, onNavigate }) {
           {!collapsed && <span>Logout</span>}
         </button>
       </div>
+    </div>
+  );
+}
+
+function DeoVerificationMenu({ collapsed, open, onToggle, onNavigate }) {
+  const location = useLocation();
+  const query = new URLSearchParams(location.search);
+  const activePriority = String(query.get("priority") || "").toUpperCase();
+  const isVerificationRoute = location.pathname === "/verification-requests";
+  const priorityItems = [
+    ["LOW", "Low Requests"],
+    ["MEDIUM", "Medium Requests"],
+    ["HIGH", "High Requests"],
+    ["CRITICAL", "Critical Requests"],
+  ];
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        title={collapsed ? "Verification Requests" : undefined}
+        className={`portal-sidebar__link ${isVerificationRoute ? "portal-sidebar__link--active" : ""}`}
+      >
+        <span className="portal-sidebar__link-icon"><GavelRegular /></span>
+        {!collapsed && (
+          <>
+            <span>Verification Requests</span>
+            <span className="ml-auto">{open ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
+          </>
+        )}
+        {isVerificationRoute && <span className="portal-sidebar__link-indicator" />}
+      </button>
+      {!collapsed && open && (
+        <div className="mt-1 space-y-1">
+          {priorityItems.map(([priority, label]) => (
+            <NavLink
+              key={priority}
+              to={`/verification-requests?priority=${priority}`}
+              onClick={onNavigate}
+              className={`portal-sidebar__link ${isVerificationRoute && activePriority === priority ? "portal-sidebar__link--active" : ""}`}
+              style={{ paddingLeft: "3.15rem", fontSize: "0.92rem" }}
+            >
+              <span>{label}</span>
+              {isVerificationRoute && activePriority === priority && <span className="portal-sidebar__link-indicator" />}
+            </NavLink>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

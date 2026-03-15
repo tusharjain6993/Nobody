@@ -1,12 +1,22 @@
 import { useState } from "react";
 import { NavLink, useNavigate, Outlet } from "react-router-dom";
 import { useHCMAuth } from "./HCMAuthContext";
+import {
+  DataBarVerticalRegular,
+  FolderRegular,
+  PersonRegular,
+  AddRegular,
+  BuildingBankRegular,
+  SignOutRegular,
+  PanelLeftExpandRegular,
+  PanelLeftContractRegular,
+} from "@fluentui/react-icons";
 
 const NAV_ITEMS = [
-  { to: "/hcm/dashboard", label: "Dashboard", icon: "📊" },
-  { to: "/hcm/cases", label: "Cases", icon: "📂" },
-  { to: "/hcm/citizens", label: "Citizens", icon: "👤" },
-  { to: "/hcm/new-case", label: "New Case", icon: "➕" },
+  { to: "/hcm/dashboard", label: "Dashboard", icon: DataBarVerticalRegular },
+  { to: "/hcm/cases", label: "Cases", icon: FolderRegular },
+  { to: "/hcm/citizens", label: "Citizens", icon: PersonRegular },
+  { to: "/hcm/new-case", label: "New Case", icon: AddRegular },
 ];
 
 export default function HCMLayout() {
@@ -47,7 +57,7 @@ export default function HCMLayout() {
             borderRadius: "10px", display: "flex",
             alignItems: "center", justifyContent: "center",
             fontSize: "1.1rem",
-          }}>🏛️</div>
+          }}><BuildingBankRegular /></div>
           {!collapsed && (
             <span style={{ color: "#f1f5f9", fontWeight: "700", fontSize: "0.85rem", whiteSpace: "nowrap" }}>
               HCM Portal
@@ -61,13 +71,15 @@ export default function HCMLayout() {
               lineHeight: 1,
             }}
           >
-            {collapsed ? "→" : "←"}
+            {collapsed ? <PanelLeftExpandRegular /> : <PanelLeftContractRegular />}
           </button>
         </div>
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: "0.75rem 0.5rem", overflowY: "auto" }}>
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            return (
             <NavLink
               key={item.to}
               to={item.to}
@@ -88,10 +100,10 @@ export default function HCMLayout() {
                 whiteSpace: "nowrap",
               })}
             >
-              <span style={{ fontSize: "1.1rem", flexShrink: 0 }}>{item.icon}</span>
+              <span style={{ fontSize: "1.1rem", flexShrink: 0, display: "inline-flex" }}><Icon /></span>
               {!collapsed && item.label}
             </NavLink>
-          ))}
+          );})}
         </nav>
 
         {/* User + Logout */}
@@ -127,7 +139,7 @@ export default function HCMLayout() {
               overflow: "hidden", whiteSpace: "nowrap",
             }}
           >
-            <span style={{ fontSize: "1.1rem", flexShrink: 0 }}>🚪</span>
+            <span style={{ fontSize: "1.1rem", flexShrink: 0, display: "inline-flex" }}><SignOutRegular /></span>
             {!collapsed && "Logout"}
           </button>
         </div>

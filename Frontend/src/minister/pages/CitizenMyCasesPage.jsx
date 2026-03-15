@@ -17,6 +17,13 @@ function Card({ title, subtitle, status, children }) {
   );
 }
 
+function getCitizenFacingStatus(item) {
+  if (item?.itemType === "meeting" && ["verification_needed", "approved", "under_review"].includes(item.status)) {
+    return { value: "under_review", label: "Under Review" };
+  }
+  return { value: item?.status || "", label: item?.statusLabel || "" };
+}
+
 export default function CitizenMyCasesPage() {
   const navigate = useNavigate();
   const [data, setData] = useState({ meetings: [], complaints: [] });
@@ -51,21 +58,20 @@ export default function CitizenMyCasesPage() {
     return combined.filter((item) => {
       const tabOk = tab === "all" || item.itemType === tab;
       const typeOk = filters.type === "all" || item.itemType === filters.type;
-      const statusOk = filters.status === "all" || item.status === filters.status;
+      const citizenStatus = getCitizenFacingStatus(item);
+      const statusOk = filters.status === "all" || citizenStatus.value === filters.status;
       const q = filters.q.trim().toLowerCase();
       const searchText = [
         item.primaryTitle,
         item.primaryId,
-        item.statusLabel,
-        item.status,
+        citizenStatus.label,
+        citizenStatus.value,
         item.currentOwner,
-        item.nextAction,
         item.department,
         item.relatedMeeting?.requestId,
         item.relatedComplaint?.complaintId,
         item.scheduleLocation,
         item.rejectReason,
-        item.verificationOutcome,
         item.resolutionSummary,
         item.visitorId,
         item.meetingDocket,
@@ -74,10 +80,12 @@ export default function CitizenMyCasesPage() {
     });
   }, [data.complaints, data.meetings, filters, tab]);
 
-  const statusOptions = useMemo(() => Array.from(new Set([
-    ...data.meetings.map((item) => item.status),
-    ...data.complaints.map((item) => item.status),
-  ])).sort(), [data.complaints, data.meetings]);
+  const statusOptions = useMemo(() => {
+    return Array.from(new Set([
+      ...data.meetings.map((item) => getCitizenFacingStatus({ ...item, itemType: "meeting" }).value),
+      ...data.complaints.map((item) => getCitizenFacingStatus({ ...item, itemType: "complaint" }).value),
+    ])).filter(Boolean).sort();
+  }, [data.complaints, data.meetings]);
 
   return (
     <div className="portal-page">
@@ -118,11 +126,10 @@ export default function CitizenMyCasesPage() {
       {!loading && !error && (
         <div className="portal-list">
           {items.map((item) => item.itemType === "meeting" ? (
-            <Card key={`meeting-${item._id}`} title={item.purpose} subtitle={item.requestId} status={item.statusLabel}>
+            <Card key={`meeting-${item._id}`} title={item.purpose} subtitle={item.requestId} status={getCitizenFacingStatus(item).label}>
               <div style={{ color: "var(--text-secondary)", fontSize: "0.92rem", lineHeight: 1.6 }}>
                 Referred to: {item.referralAdminName}
                 <div style={{ marginTop: "0.35rem" }}>Current owner: {item.currentOwner}</div>
-                <div style={{ marginTop: "0.35rem" }}>Next action: {item.nextAction}</div>
                 {item.scheduleDate && (
                   <div style={{ marginTop: "0.55rem" }}>
                     Schedule: {item.scheduleDate} · {item.scheduleTime} · {item.scheduleLocation}
@@ -131,17 +138,15 @@ export default function CitizenMyCasesPage() {
                 {item.visitorId && <div style={{ marginTop: "0.35rem" }}>Visitor ID: {item.visitorId}</div>}
                 {item.meetingDocket && <div style={{ marginTop: "0.35rem" }}>Meeting Docket: {item.meetingDocket}</div>}
                 {item.rejectReason && <div style={{ marginTop: "0.35rem", color: "var(--accent-danger)" }}>Reject reason: {item.rejectReason}</div>}
-                {item.verificationOutcome && <div style={{ marginTop: "0.35rem" }}>Verification call outcome: {item.verificationOutcome}</div>}
                 {item.relatedComplaint && <div style={{ marginTop: "0.35rem" }}>Linked complaint: {item.relatedComplaint.complaintId}</div>}
                 <button type="button" onClick={() => navigate(`/meetings/${item._id}`)} className="portal-btn-secondary" style={{ marginTop: "0.85rem" }}>Open full meeting record</button>
               </div>
             </Card>
           ) : (
-            <Card key={`complaint-${item._id}`} title={item.title} subtitle={item.complaintId} status={item.statusLabel}>
+            <Card key={`complaint-${item._id}`} title={item.title} subtitle={item.complaintId} status={getCitizenFacingStatus(item).label}>
               <div style={{ color: "var(--text-secondary)", fontSize: "0.92rem", lineHeight: 1.6 }}>
                 {item.details}
                 <div style={{ marginTop: "0.35rem" }}>Current owner: {item.currentOwner}</div>
-                <div style={{ marginTop: "0.35rem" }}>Next action: {item.nextAction}</div>
                 {item.department && <div style={{ marginTop: "0.55rem" }}>Department: {item.department}</div>}
                 {item.callOutcome && <div style={{ marginTop: "0.35rem" }}>Call outcome: {item.callOutcome}</div>}
                 {item.resolutionSummary && <div style={{ marginTop: "0.35rem" }}>Resolution summary: {item.resolutionSummary}</div>}

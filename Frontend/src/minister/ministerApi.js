@@ -43,6 +43,10 @@ function humanizeStatus(value = "") {
   return String(value).replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function humanizePriority(value = "") {
+  return String(value || "").replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function nextCode(prefix, table) {
   const row = queryOne(`SELECT COUNT(*) as cnt FROM ${table}`);
   return `${prefix}-${String((row?.cnt || 0) + 1).padStart(6, "0")}`;
@@ -237,10 +241,10 @@ function deriveMeetingOwner(meeting) {
 function deriveMeetingNextAction(meeting) {
   if (meeting.executionStatus === "completed") return "Archive summary and keep QR record available.";
   if (meeting.executionStatus === "cancelled") return "Reschedule or close the meeting request.";
-  if (meeting.status === "submitted") return "Approve, reject, or send the request for DEO verification.";
+  if (meeting.status === "submitted") return "Approve or reject the meeting request.";
   if (meeting.status === "verification_needed") return "DEO should verify the citizen on call and return the request.";
-  if (meeting.status === "under_review") return "Approve, reject, or schedule the meeting.";
-  if (meeting.status === "approved") return "Schedule the approved meeting slot and issue docket details.";
+  if (meeting.status === "under_review") return "Schedule, reject, or return the meeting to the initial review state.";
+  if (meeting.status === "approved") return "Send the approved meeting for DEO verification or return it to the initial review state.";
   if (meeting.status === "scheduled") return "Citizen attends the meeting; admin can later mark completed or cancel.";
   if (meeting.status === "rejected") return "No further action unless the case is reopened separately.";
   return "Review workflow state.";
@@ -268,6 +272,9 @@ function deriveComplaintNextAction(complaint) {
 
 function buildMeetingRequest(row) {
   if (!row) return null;
+  const citizenRow = row.citizenId
+    ? queryOne("SELECT * FROM users WHERE id = ?", [Number(row.citizenId)])
+    : null;
   const complaintRow = row.escalatedFromComplaintId
     ? queryOne("SELECT * FROM complaints WHERE id = ?", [Number(row.escalatedFromComplaintId)])
     : null;
@@ -279,6 +286,18 @@ function buildMeetingRequest(row) {
   return {
     ...row,
     citizenSnapshot: parseJson(row.citizenSnapshot, {}),
+    citizenRecord: citizenRow ? {
+      name: citizenRow.name,
+      citizenId: citizenRow.citizenId,
+      aadhaar: citizenRow.aadhaar || "",
+      phoneNumbers: parseJson(citizenRow.phoneNumbers, []),
+      age: citizenRow.age || "",
+      gender: citizenRow.gender || "",
+      pinCode: citizenRow.pinCode || "",
+      state: citizenRow.state || "",
+      city: citizenRow.city || "",
+      mpName: citizenRow.mpName || "",
+    } : null,
     attachments: parseJson(row.attachments, row.attachmentData
       ? [{ name: row.attachmentName, type: row.attachmentType, data: row.attachmentData }]
       : []),
@@ -288,6 +307,7 @@ function buildMeetingRequest(row) {
     relatedNotifications: notifications,
     masterTimeline: timeline,
     statusLabel: humanizeStatus(row.status),
+    priorityLabel: humanizePriority(row.priority),
     executionStatusLabel: humanizeStatus(row.executionStatus || "pending"),
     currentOwner: deriveMeetingOwner(row),
     nextAction: deriveMeetingNextAction(row),
@@ -327,7 +347,7 @@ function buildCalendarEvent(row) {
 function buildMeetingCalendarDetails(meeting) {
   const parts = [
     `Citizen: ${meeting.citizenSnapshot?.name || "Citizen"}`,
-    `Meeting type: ${meeting.priority === "VIP" || meeting.priority === "HIGH" ? "VIP" : "Standard"}`,
+    `Meeting type: ${meeting.priority === "VIP" ? "VIP" : "Standard"}`,
     `Visitor ID: ${meeting.visitorId || "Pending"}`,
     `Docket: ${meeting.meetingDocket || "Pending"}`,
   ];
@@ -405,7 +425,7 @@ function buildOperationalMetrics(complaints, meetings) {
 
   const priorityBreakdown = [{
     priority: "VIP",
-    count: meetings.filter((item) => item.priority === "VIP" || item.priority === "HIGH").length,
+    count: meetings.filter((item) => item.priority === "VIP").length,
   }];
 
   return {
@@ -433,7 +453,7 @@ function buildCaseSummaryRows(itemType, item) {
   ];
   if (itemType === "meeting") {
     rows.push(["Purpose", item.purpose || ""]);
-    rows.push(["Meeting type", item.priority === "VIP" || item.priority === "HIGH" ? "VIP" : "Standard"]);
+    rows.push(["Meeting type", item.priority === "VIP" ? "VIP" : "Standard"]);
     rows.push(["Schedule", item.scheduleDate ? `${item.scheduleDate} ${item.scheduleTime || ""}` : "Pending"]);
     rows.push(["Location", item.scheduleLocation || ""]);
     rows.push(["Execution status", item.executionStatusLabel || "Pending"]);
@@ -575,8 +595,6 @@ export const citizenApi = {
       throw new Error(`Citizen profile incomplete. Missing: ${profile.missing.join(", ")}`);
     }
     const purpose = String(body.purpose || "").trim();
-    const preferredDate = String(body.preferredDate || "").trim();
-    const preferredTime = String(body.preferredTime || "").trim();
     const referralAdminUserId = Number(body.referralAdminUserId || 0);
     const referralAdmin = queryOne("SELECT * FROM users WHERE id = ? AND role = 'admin'", [referralAdminUserId]);
     if (!purpose) throw new Error("Purpose of meeting is required");
@@ -600,19 +618,15 @@ export const citizenApi = {
         "submitted",
         "",
         "",
-        preferredDate,
-        preferredTime,
         "",
         "",
         "",
         "",
-        [preferredDate, preferredTime].filter(Boolean).length
-          ? `Citizen preferred ${preferredDate || "a date"} ${preferredTime || ""}`.trim()
-          : "",
         "",
-        [preferredDate, preferredTime].filter(Boolean).length
-          ? "Citizen submitted the request with a preferred meeting slot."
-          : "Citizen submitted the request.",
+        "",
+        "",
+        "",
+        "Citizen submitted the request.",
         "pending",
         body.escalatedFromComplaintId ? Number(body.escalatedFromComplaintId) : null,
         now,
@@ -734,24 +748,35 @@ export const workItemsApi = {
     };
   },
 
-  markMeetingVerificationNeeded: async (id, notes) => {
+  markMeetingVerificationNeeded: async (id, payload = {}) => {
     await getDb();
     const user = requireRole("admin");
     const row = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
-    assertMeetingTransition(row, ["submitted", "under_review"], "Only newly submitted or under-review meetings can be sent for verification");
+    assertMeetingTransition(row, ["approved"], "Only approved meetings can be sent for verification");
+    const notes = typeof payload === "string" ? payload : String(payload.notes || "").trim();
+    const verificationPriority = String(typeof payload === "string" ? "" : payload.priority || "").trim().toUpperCase() || "MEDIUM";
+    if (!["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(verificationPriority)) {
+      throw new Error("Verification priority must be Low, Medium, High, or Critical");
+    }
     updateMeetingOwnership(row, user);
     execute(
-      "UPDATE meeting_requests SET status='verification_needed', adminNotes=?, statusReason=?, updatedAt=? WHERE id=?",
-      [notes || row.adminNotes || "", String(notes || "").trim() || "Admin requested a DEO verification call.", ts(), Number(id)]
+      "UPDATE meeting_requests SET status='verification_needed', priority=?, adminNotes=?, statusReason=?, updatedAt=? WHERE id=?",
+      [
+        verificationPriority,
+        notes || row.adminNotes || "",
+        `${humanizePriority(verificationPriority)} priority verification requested by admin.`,
+        ts(),
+        Number(id),
+      ]
     );
     const updated = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
     const snapshot = parseJson(updated?.citizenSnapshot, {});
     const phone = snapshot.phoneNumbers?.[0] || "No phone available";
-    addLog("meeting_request", id, "Verification requested", notes || "", user);
+    addLog("meeting_request", id, "Verification requested", `${humanizePriority(verificationPriority)} priority${notes ? ` · ${notes}` : ""}`, user);
     addNotificationForUsers(
       getDeoUsers().map((deo) => deo.id),
       "Verification Needed",
-      `Call citizen ${snapshot.citizenId || "Unknown"} on ${phone} for meeting ${updated?.requestId || ""}.`,
+      `${humanizePriority(verificationPriority)} priority: call citizen ${snapshot.citizenId || "Unknown"} on ${phone} for meeting ${updated?.requestId || ""}.`,
       `/verification-requests`
     );
     return workItemsApi.getMeetingRequest(id);
@@ -764,38 +789,43 @@ export const workItemsApi = {
     assertMeetingTransition(row, ["verification_needed"], "Only verification-pending meetings can record a verification outcome");
     if (!String(outcome || "").trim()) throw new Error("Verification call outcome is required");
     execute(
-      "UPDATE meeting_requests SET status='submitted', verificationOutcome=?, statusReason=?, updatedAt=? WHERE id=?",
+      "UPDATE meeting_requests SET status='under_review', verificationOutcome=?, statusReason=?, updatedAt=? WHERE id=?",
       [String(outcome).trim(), "DEO completed verification and returned the request to admin review.", ts(), Number(id)]
     );
     addLog("meeting_request", id, "Verification completed", outcome, user);
+    const adminTargets = Array.from(new Set([
+      Number(row.assignedAdminUserId || 0),
+      Number(row.referralAdminUserId || 0),
+    ].filter(Boolean)));
     addNotificationForUsers(
-      getAdminUsers().map((admin) => admin.id),
+      adminTargets.length ? adminTargets : getAdminUsers().map((admin) => admin.id),
       "Verification Complete",
-      `DEO completed verification for meeting ${row.requestId}.`,
+      `DEO completed verification for meeting ${row.requestId}. Please proceed further.`,
       `/cases/meeting/${id}`
     );
-    return workItemsApi.getMeetingRequest(id);
+    const updated = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
+    return { meetingRequest: buildMeetingRequest(updated) };
   },
 
   approveMeetingRequest: async (id, payload = {}) => {
     await getDb();
     const user = requireRole("admin");
     const row = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
-    assertMeetingTransition(row, ["submitted", "under_review"], "Only review-ready meetings can be approved");
+    assertMeetingTransition(row, ["submitted"], "Only newly submitted meetings can be approved");
     updateMeetingOwnership(row, user);
     execute(
       `UPDATE meeting_requests
        SET status='approved', statusReason=?, updatedAt=?
        WHERE id=?`,
       [
-        "Approved by admin; scheduling is the next required step.",
+        "Approved by admin and waiting for DEO verification before scheduling.",
         ts(),
         Number(id),
       ]
     );
     const updated = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
     addLog("meeting_request", id, "Meeting approved", String(payload.adminNotes || "").trim(), user);
-    addNotificationForUsers([updated.citizenId], "Meeting Request", `Your request ${updated.requestId} was approved and is awaiting schedule confirmation.`, "/meetings");
+    addNotificationForUsers([updated.citizenId], "Meeting Request", `Your request ${updated.requestId} is under admin processing and will be scheduled once the review is completed.`, "/meetings");
     return workItemsApi.getMeetingRequest(id);
   },
 
@@ -803,7 +833,7 @@ export const workItemsApi = {
     await getDb();
     const user = requireRole("admin");
     const row = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
-    assertMeetingTransition(row, ["approved", "scheduled"], "Only approved or already scheduled meetings can be scheduled or rescheduled");
+    assertMeetingTransition(row, ["under_review", "approved", "scheduled"], "Only verification-completed, approved, or already scheduled meetings can be scheduled or rescheduled");
     const date = String(payload.scheduleDate || "").trim();
     const time = String(payload.scheduleTime || "").trim();
     const location = String(payload.scheduleLocation || "").trim();
@@ -854,7 +884,7 @@ export const workItemsApi = {
     await getDb();
     const user = requireRole("admin");
     const row = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
-    assertMeetingTransition(row, ["submitted", "verification_needed", "under_review", "approved"], "Rejected meetings must still be in the review pipeline");
+    assertMeetingTransition(row, ["submitted", "approved", "verification_needed", "under_review"], "Rejected meetings must still be in the review pipeline");
     const rejectReason = String(reason || "").trim();
     if (!rejectReason) throw new Error("Rejection reason is required");
     updateMeetingOwnership(row, user);
@@ -871,11 +901,11 @@ export const workItemsApi = {
     await getDb();
     const user = requireRole("admin");
     const row = queryOne("SELECT * FROM meeting_requests WHERE id = ?", [Number(id)]);
-    assertMeetingTransition(row, ["approved"], "Only approved but not yet scheduled meetings can be reverted");
+    assertMeetingTransition(row, ["approved", "under_review"], "Only approved or verification-completed meetings can be returned");
     const notes = String(reason || "").trim();
     if (!notes) throw new Error("A reason is required to revert approval");
     execute(
-      "UPDATE meeting_requests SET status='under_review', statusReason=?, updatedAt=? WHERE id=?",
+      "UPDATE meeting_requests SET status='submitted', statusReason=?, updatedAt=? WHERE id=?",
       [notes, ts(), Number(id)]
     );
     addLog("meeting_request", id, "Approval reverted", notes, user);
@@ -1475,7 +1505,7 @@ export const casesApi = {
       caseId: item.requestId,
       purpose: item.purpose,
       status: item.status.toUpperCase(),
-      urgency: item.priority === "VIP" || item.priority === "HIGH" ? "VIP" : "STANDARD",
+      urgency: item.priority === "VIP" ? "VIP" : "STANDARD",
       citizenSnapshot: item.citizenSnapshot,
       createdAt: item.createdAt,
       assignments: item.scheduleDate ? [{ dueDate: `${item.scheduleDate}T${item.scheduleTime || "09:00"}`, status: getMeetingOperationalState(item) }] : [],

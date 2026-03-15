@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { MOCK_CITIZENS, formatDate } from "../../minister/ministerData";
 import { useNavigate } from "react-router-dom";
+import { PersonRegular, AddRegular, SearchRegular } from "@fluentui/react-icons";
 
 export default function HCMCitizensPage() {
   const navigate = useNavigate();
@@ -58,7 +59,7 @@ export default function HCMCitizensPage() {
     <div style={{ padding: "1.5rem", maxWidth: "1000px", margin: "0 auto", fontFamily: "'Lora', serif" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
         <div>
-          <h1 style={{ fontSize: "1.4rem", fontWeight: "800", color: "#0f172a", margin: 0 }}>👤 Citizens</h1>
+          <h1 style={{ fontSize: "1.4rem", fontWeight: "800", color: "#0f172a", margin: 0, display: "flex", alignItems: "center", gap: "0.45rem" }}><PersonRegular /> Citizens</h1>
           <p style={{ color: "#64748b", margin: "0.2rem 0 0", fontSize: "0.85rem" }}>
             {filtered.length} citizen{filtered.length !== 1 ? "s" : ""} registered
           </p>
@@ -73,7 +74,7 @@ export default function HCMCitizensPage() {
             cursor: "pointer", boxShadow: "0 4px 12px rgba(99,102,241,0.3)",
           }}
         >
-          ➕ Add Citizen
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}><AddRegular /> Add Citizen</span>
         </button>
       </div>
 
@@ -85,7 +86,7 @@ export default function HCMCitizensPage() {
       }}>
         <input
           type="text"
-          placeholder="🔍  Search by name, phone, or Aadhaar…"
+          placeholder="Search by name, phone, or Aadhaar..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{
@@ -104,7 +105,7 @@ export default function HCMCitizensPage() {
       }}>
         {filtered.length === 0 ? (
           <div style={{ padding: "3rem", textAlign: "center", color: "#94a3b8" }}>
-            <div style={{ fontSize: "2.5rem" }}>👤</div>
+            <div style={{ fontSize: "2.5rem", display: "inline-flex" }}><PersonRegular /></div>
             <div style={{ marginTop: "0.5rem", fontWeight: "600" }}>No citizens found</div>
           </div>
         ) : (
@@ -181,7 +182,7 @@ export default function HCMCitizensPage() {
             boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
           }}>
             <h2 style={{ fontWeight: "800", color: "#0f172a", margin: "0 0 1.25rem", fontSize: "1.1rem" }}>
-              👤 Add New Citizen
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}><PersonRegular /> Add New Citizen</span>
             </h2>
 
             {[

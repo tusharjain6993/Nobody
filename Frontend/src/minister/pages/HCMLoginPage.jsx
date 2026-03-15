@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { BuildingBankRegular } from "@fluentui/react-icons";
 import { useHCMAuth } from "../HCMAuthContext";
 import { authApi } from "../ministerApi";
 import { resetDemoDatabase } from "../../db/database";
@@ -73,7 +74,7 @@ export default function HCMLoginPage() {
       <div className="auth-card" style={{ maxWidth: "520px" }}>
         <div className="auth-header">
           <div className="auth-logo">
-            <span style={{ fontSize: "1.75rem" }}>🏛️</span>
+            <BuildingBankRegular style={{ fontSize: "1.75rem" }} />
           </div>
           <h1 className="auth-title">HCM Portal</h1>
           <p className="auth-subtitle">Citizen, admin, and DEO demo access with session expiry and account lockout simulation</p>

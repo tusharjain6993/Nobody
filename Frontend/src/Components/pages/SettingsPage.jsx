@@ -3,6 +3,13 @@ import { useTheme } from "../../context/ThemeContext";
 import { useHCMAuth } from "../../minister/HCMAuthContext";
 import { getRoleLabel } from "../../constants/adminWorkflow";
 import {
+  PersonRegular,
+  PaintBrushRegular,
+  AlertRegular,
+  ArchiveRegular,
+  InfoRegular,
+} from "@fluentui/react-icons";
+import {
   deleteDemoSnapshot,
   exportDemoDatabase,
   importDemoDatabase,
@@ -14,11 +21,11 @@ import {
 } from "../../db/database";
 
 const SECTIONS = [
-  { id: "profile", label: "Profile", icon: "👤" },
-  { id: "appearance", label: "Appearance", icon: "🎨" },
-  { id: "notifications", label: "Notifications", icon: "🔔" },
-  { id: "demo", label: "Demo Data", icon: "🗂️" },
-  { id: "about", label: "About", icon: "ℹ️" },
+  { id: "profile", label: "Profile", icon: PersonRegular },
+  { id: "appearance", label: "Appearance", icon: PaintBrushRegular },
+  { id: "notifications", label: "Notifications", icon: AlertRegular },
+  { id: "demo", label: "Demo Data", icon: ArchiveRegular },
+  { id: "about", label: "About", icon: InfoRegular },
 ];
 
 export default function SettingsPage() {
@@ -92,8 +99,9 @@ export default function SettingsPage() {
             : "Citizen settings focus on profile completeness and request communication details.";
       return (
         <div>
-          <h2 className="settings-section-title" style={{ fontWeight: 800, fontSize: "1.1rem", margin: "0 0 1rem" }}>
-            👤 Profile Settings
+          <h2 className="settings-section-title" style={{ fontWeight: 800, fontSize: "1.1rem", margin: "0 0 1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <PersonRegular />
+            <span>Profile Settings</span>
           </h2>
           <div className="settings-card" style={{ ...card, display: "flex", alignItems: "center", gap: "1.25rem" }}>
             <img
@@ -117,8 +125,9 @@ export default function SettingsPage() {
     if (active === "appearance") {
       return (
         <div>
-          <h2 className="settings-section-title" style={{ fontWeight: 800, fontSize: "1.1rem", margin: "0 0 1rem" }}>
-            🎨 Appearance
+          <h2 className="settings-section-title" style={{ fontWeight: 800, fontSize: "1.1rem", margin: "0 0 1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <PaintBrushRegular />
+            <span>Appearance</span>
           </h2>
           <div className="settings-card" style={card}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -170,8 +179,9 @@ export default function SettingsPage() {
             ];
       return (
         <div>
-          <h2 className="settings-section-title" style={{ fontWeight: 800, fontSize: "1.1rem", margin: "0 0 1rem" }}>
-            🔔 Notification Preferences
+          <h2 className="settings-section-title" style={{ fontWeight: 800, fontSize: "1.1rem", margin: "0 0 1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <AlertRegular />
+            <span>Notification Preferences</span>
           </h2>
           <div className="settings-card" style={card}>
             {notificationOptions.map((item) => (
@@ -205,8 +215,9 @@ export default function SettingsPage() {
     if (active === "demo") {
       return (
         <div>
-          <h2 className="settings-section-title" style={{ fontWeight: 800, fontSize: "1.1rem", margin: "0 0 1rem" }}>
-            🗂️ Demo State Lifecycle
+          <h2 className="settings-section-title" style={{ fontWeight: 800, fontSize: "1.1rem", margin: "0 0 1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <ArchiveRegular />
+            <span>Demo State Lifecycle</span>
           </h2>
           {message && <div className="portal-alert portal-alert--success" style={{ marginBottom: "1rem" }}>{message}</div>}
           <div className="settings-card" style={card}>
@@ -261,8 +272,9 @@ export default function SettingsPage() {
 
     return (
       <div>
-        <h2 className="settings-section-title" style={{ fontWeight: 800, fontSize: "1.1rem", margin: "0 0 1rem" }}>
-          ℹ️ About
+        <h2 className="settings-section-title" style={{ fontWeight: 800, fontSize: "1.1rem", margin: "0 0 1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <InfoRegular />
+          <span>About</span>
         </h2>
         <div className="settings-card" style={card}>
           <p className="settings-body-text" style={{ margin: 0, lineHeight: 1.7 }}>
@@ -284,17 +296,21 @@ export default function SettingsPage() {
 
       <div className="settings-page">
         <aside className="settings-nav">
-        {SECTIONS.map((section) => (
-          <button
-            key={section.id}
-            type="button"
-            onClick={() => setActive(section.id)}
-            className={active === section.id ? "portal-tab portal-tab--active" : "portal-tab"}
-            style={{ width: "100%", justifyContent: "flex-start" }}
-          >
-            {section.icon} {section.label}
-          </button>
-        ))}
+        {SECTIONS.map((section) => {
+          const Icon = section.icon;
+          return (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => setActive(section.id)}
+              className={active === section.id ? "portal-tab portal-tab--active" : "portal-tab"}
+              style={{ width: "100%", justifyContent: "flex-start", display: "flex", alignItems: "center", gap: "0.5rem" }}
+            >
+              <Icon />
+              <span>{section.label}</span>
+            </button>
+          );
+        })}
         </aside>
         <section>{renderContent()}</section>
       </div>

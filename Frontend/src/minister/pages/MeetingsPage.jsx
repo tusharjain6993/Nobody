@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useHCMAuth } from "../HCMAuthContext";
 import { calendarApi, meetingsApi } from "../ministerApi";
 import { filesToDocuments } from "../../utils/fileHelpers";
@@ -17,10 +17,47 @@ function statusBadgeClass(status) {
   return "bg-slate-100 text-slate-700";
 }
 
+function getCitizenFacingStatusLabel(meeting) {
+  if (!meeting) return "";
+  if (["verification_needed", "approved", "under_review"].includes(meeting.status)) {
+    return "Under Review";
+  }
+  return meeting.statusLabel;
+}
+
+const VERIFICATION_PRIORITY_OPTIONS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+
+function getVerificationPriorityRank(priority = "") {
+  const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+  return order[String(priority || "").toUpperCase()] ?? 4;
+}
+
+function getPriorityChip(priority = "") {
+  const value = String(priority || "").toUpperCase();
+  if (!value) return null;
+  return `${value.charAt(0)}${value.slice(1).toLowerCase()} Priority`;
+}
+
+function SuccessModal({ open, title, message, onClose }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center px-4" style={{ background: "rgba(15, 23, 42, 0.58)", backdropFilter: "blur(8px)" }}>
+      <div className="w-full max-w-md rounded-[30px] border p-6 text-center shadow-2xl" style={{ background: "linear-gradient(180deg, var(--bg-primary), color-mix(in srgb, var(--bg-primary) 82%, var(--accent-primary-subtle) 18%))", borderColor: "var(--border-primary)" }}>
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: "linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))", color: "#fff", fontSize: "1.75rem", boxShadow: "var(--shadow-card)" }}>✓</div>
+        <div className="portal-page__eyebrow" style={{ justifyContent: "center", marginBottom: "0.7rem" }}>Verification Updated</div>
+        <h3 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>{title}</h3>
+        <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>{message}</p>
+        <button type="button" onClick={onClose} className="portal-btn mt-5 w-full">Continue</button>
+      </div>
+    </div>
+  );
+}
+
 export default function MeetingsPage() {
   const { user } = useHCMAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { meetingId = "" } = useParams();
   const [events, setEvents] = useState([]);
   const [meetings, setMeetings] = useState([]);
@@ -28,6 +65,8 @@ export default function MeetingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [verificationNotes, setVerificationNotes] = useState({});
+  const [verificationSuccess, setVerificationSuccess] = useState({ open: false, title: "", message: "" });
+  const [verificationSearch, setVerificationSearch] = useState("");
   const [form, setForm] = useState({
     title: "",
     details: "",
@@ -42,6 +81,46 @@ export default function MeetingsPage() {
   });
   const [photos, setPhotos] = useState([]);
   const [documents, setDocuments] = useState([]);
+  const routePriority = String(searchParams.get("priority") || "").toUpperCase();
+  const activeVerificationPriority = VERIFICATION_PRIORITY_OPTIONS.includes(routePriority) ? routePriority : "CRITICAL";
+  const filteredVerificationRequests = [...verificationRequests]
+    .filter((request) => String(request.priority || "").toUpperCase() === activeVerificationPriority)
+    .filter((request) => {
+      const q = verificationSearch.trim().toLowerCase();
+      if (!q) return true;
+      const haystack = [
+        request.requestId,
+        request.purpose,
+        request.adminNotes,
+        request.currentOwner,
+        request.referralAdminName,
+        request.relatedComplaint?.complaintId,
+        request.citizenSnapshot?.name,
+        request.citizenSnapshot?.citizenId,
+        ...(request.citizenSnapshot?.phoneNumbers || []),
+        request.citizenRecord?.name,
+        request.citizenRecord?.citizenId,
+        request.citizenRecord?.aadhaar,
+        ...(request.citizenRecord?.phoneNumbers || []),
+        request.citizenRecord?.age,
+        request.citizenRecord?.gender,
+        request.citizenRecord?.city,
+        request.citizenRecord?.state,
+        request.citizenRecord?.pinCode,
+        request.citizenRecord?.mpName,
+      ].filter(Boolean).join(" ").toLowerCase();
+      return haystack.includes(q);
+    })
+    .sort((left, right) => {
+      const priorityGap = getVerificationPriorityRank(left.priority) - getVerificationPriorityRank(right.priority);
+      if (priorityGap !== 0) return priorityGap;
+      return new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0);
+    });
+
+  const getCitizenSafeTimeline = (entries = []) => entries.filter((entry) => {
+    const text = `${entry.action || ""} ${entry.notes || ""}`.toLowerCase();
+    return !text.includes("verification");
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -103,7 +182,7 @@ export default function MeetingsPage() {
                   </p>
                 </div>
                 <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${statusBadgeClass(selectedMeeting.status)}`}>
-                  {selectedMeeting.statusLabel}
+                  {getCitizenFacingStatusLabel(selectedMeeting)}
                 </span>
               </div>
 
@@ -132,7 +211,7 @@ export default function MeetingsPage() {
                     Visitor ID: {selectedMeeting.visitorId || "Pending"}
                   </div>
                   <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-                    Docket: {selectedMeeting.meetingDocket || "Pending"} · {selectedMeeting.priority === "VIP" || selectedMeeting.priority === "HIGH" ? "VIP Meeting" : "Standard Meeting"}
+                    Docket: {selectedMeeting.meetingDocket || "Pending"}
                   </div>
                 </div>
               </div>
@@ -159,18 +238,10 @@ export default function MeetingsPage() {
                 </div>
               </div>
 
-              <div className="portal-grid portal-grid--2">
-                <div className="portal-card">
-                  <div className="portal-stat__label">Admin Notes</div>
-                  <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-                    {selectedMeeting.adminNotes || "No admin notes added yet."}
-                  </div>
-                </div>
-                <div className="portal-card">
-                  <div className="portal-stat__label">Verification Update</div>
-                  <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-                    {selectedMeeting.verificationOutcome || (selectedMeeting.status === "verification_needed" ? "Verification call pending." : "No verification note yet.")}
-                  </div>
+              <div className="portal-card">
+                <div className="portal-stat__label">Admin Notes</div>
+                <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+                  {selectedMeeting.adminNotes || "No admin notes added yet."}
                 </div>
               </div>
 
@@ -190,7 +261,14 @@ export default function MeetingsPage() {
                 <button
                   type="button"
                   disabled={selectedMeeting.status !== "scheduled"}
-                  onClick={() => downloadMeetingPassPdf(selectedMeeting)}
+                  onClick={async () => {
+                    try {
+                      setError("");
+                      await downloadMeetingPassPdf(selectedMeeting);
+                    } catch (err) {
+                      setError(err.message || "Unable to download the meeting pass PDF.");
+                    }
+                  }}
                   className={`mt-4 ${selectedMeeting.status === "scheduled" ? "portal-btn" : "portal-btn-secondary opacity-60 cursor-not-allowed"}`}
                 >
                   Download Meeting Pass PDF
@@ -204,13 +282,10 @@ export default function MeetingsPage() {
                       ["Request ID", selectedMeeting.requestId],
                       ["Citizen", selectedMeeting.citizenSnapshot?.name],
                       ["Phone", selectedMeeting.citizenSnapshot?.phoneNumbers?.[0] || ""],
-                      ["Status", selectedMeeting.statusLabel],
+                      ["Status", getCitizenFacingStatusLabel(selectedMeeting)],
                       ["Owner", selectedMeeting.currentOwner],
-                      ["Meeting type", selectedMeeting.priority === "VIP" || selectedMeeting.priority === "HIGH" ? "VIP" : "Standard"],
-                      ["Schedule", selectedMeeting.scheduleDate ? `${selectedMeeting.scheduleDate} ${selectedMeeting.scheduleTime || ""}` : "Pending"],
-                      ["Location", selectedMeeting.scheduleLocation || ""],
                     ],
-                    timeline: selectedMeeting.masterTimeline || [],
+                    timeline: getCitizenSafeTimeline(selectedMeeting.masterTimeline || []),
                   })}
                   className="mt-4 ml-3 portal-btn-secondary"
                 >
@@ -221,7 +296,7 @@ export default function MeetingsPage() {
               <div className="portal-card">
                 <div className="portal-stat__label">Master Timeline</div>
                 <div className="space-y-3 mt-3">
-                  {(selectedMeeting.masterTimeline || []).map((entry) => (
+                  {getCitizenSafeTimeline(selectedMeeting.masterTimeline || []).map((entry) => (
                     <div key={`${entry.sourceLabel}-${entry._id}`} className="rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border-secondary)" }}>
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{entry.action}</div>
@@ -268,7 +343,7 @@ export default function MeetingsPage() {
           <div>
             <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-1">My Meetings</h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-3xl">
-              Track every meeting request here. Any approval, verification, rejection, schedule, visitor ID, docket, and admin note update is reflected on this page.
+              Track every meeting request here. Any review, rejection, schedule, visitor ID, docket, and admin note update is reflected on this page.
             </p>
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -292,12 +367,9 @@ export default function MeetingsPage() {
                       <th className="px-4 py-4 text-left">Task ID</th>
                       <th className="px-4 py-4 text-left">Subject</th>
                       <th className="px-4 py-4 text-left">Department</th>
-                      <th className="px-4 py-4 text-left">Meeting Type</th>
                       <th className="px-4 py-4 text-left">Status</th>
                       <th className="px-4 py-4 text-left">Holder</th>
                       <th className="px-4 py-4 text-left">Officer</th>
-                      <th className="px-4 py-4 text-left">Start Date</th>
-                      <th className="px-4 py-4 text-left">Due Date</th>
                       <th className="px-4 py-4 text-left">Actions</th>
                     </tr>
                   </thead>
@@ -316,22 +388,13 @@ export default function MeetingsPage() {
                             {meeting.referralAdminName || meeting.assignedAdminName || "General Admin Pool"}
                           </td>
                           <td className="px-4 py-4 align-top">
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[0.7rem] font-semibold bg-violet-100 text-violet-700">
-                              {meeting.priority === "VIP" || meeting.priority === "HIGH" ? "VIP" : "Standard"}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 align-top">
                             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[0.72rem] font-semibold ${statusBadgeClass(meeting.status)}`}>
-                              {meeting.statusLabel}
+                              {getCitizenFacingStatusLabel(meeting)}
                             </span>
                           </td>
                           <td className="px-4 py-4 align-top text-slate-600 dark:text-slate-300">Admin</td>
                           <td className="px-4 py-4 align-top text-slate-600 dark:text-slate-300">
                             {meeting.assignedAdminName || meeting.referralAdminName || "To be assigned"}
-                          </td>
-                          <td className="px-4 py-4 align-top text-slate-600 dark:text-slate-300">{meeting.createdAt ? new Date(meeting.createdAt).toLocaleDateString() : "Pending"}</td>
-                          <td className="px-4 py-4 align-top text-slate-600 dark:text-slate-300">
-                            {meeting.scheduleDate || (meeting.status === "rejected" ? "Closed" : "Pending")}
                           </td>
                           <td className="px-4 py-4 align-top">
                             <button
@@ -358,7 +421,7 @@ export default function MeetingsPage() {
                         <div className="font-semibold text-slate-900 dark:text-slate-100 mt-1">{meeting.purpose}</div>
                       </div>
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[0.72rem] font-semibold ${statusBadgeClass(meeting.status)}`}>
-                        {meeting.statusLabel}
+                        {getCitizenFacingStatusLabel(meeting)}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-xs text-slate-500 dark:text-slate-400 mt-4">
@@ -472,6 +535,12 @@ export default function MeetingsPage() {
 
   return (
     <div className="p-6 max-w-[1240px] mx-auto space-y-5">
+      <SuccessModal
+        open={verificationSuccess.open}
+        title={verificationSuccess.title}
+        message={verificationSuccess.message}
+        onClose={() => setVerificationSuccess({ open: false, title: "", message: "" })}
+      />
       <div>
         <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-1">
           {location.pathname === "/verification-requests" ? "Verification Requests" : "Calendar & Engagement"}
@@ -488,27 +557,78 @@ export default function MeetingsPage() {
         <div className="flex items-center justify-between gap-3 mb-4">
           <div>
             <div className="portal-page__eyebrow">DEO Desk</div>
-            <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>Verification Requests</h2>
+            <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>{getPriorityChip(activeVerificationPriority) || "Verification Requests"}</h2>
           </div>
-          <span className="portal-chip">{verificationRequests.length} open</span>
+          <span className="portal-chip">{filteredVerificationRequests.length} open</span>
         </div>
-        {!verificationRequests.length ? (
+        <div className="mb-4">
+          <input
+            value={verificationSearch}
+            onChange={(event) => setVerificationSearch(event.target.value)}
+            placeholder="Search request ID, citizen ID, Aadhaar, phone, name, complaint ID..."
+            className="portal-input"
+          />
+        </div>
+        {!filteredVerificationRequests.length ? (
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>No verification requests are waiting with DEO.</p>
         ) : (
           <div className="space-y-3">
-            {verificationRequests.map((request) => (
+            {filteredVerificationRequests.map((request) => (
               <div key={request._id} className="portal-card portal-card--soft">
                 <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="portal-chip">{request.requestId}</span>
-                      {(request.priority === "VIP" || request.priority === "HIGH") && <span className="portal-chip">VIP Meeting</span>}
+                      {getPriorityChip(request.priority) && <span className="portal-chip">{getPriorityChip(request.priority)}</span>}
+                      {request.priority === "VIP" && <span className="portal-chip">VIP Meeting</span>}
                     </div>
                     <div className="font-semibold" style={{ color: "var(--text-primary)" }}>{request.purpose}</div>
                     <div className="text-sm" style={{ color: "var(--text-secondary)" }}>
                       {request.citizenSnapshot?.name || "Citizen"} · {request.citizenSnapshot?.citizenId || "Citizen ID unavailable"} · {request.citizenSnapshot?.phoneNumbers?.[0] || "Phone unavailable"}
                     </div>
                     <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>{request.adminNotes || "Admin has requested a verification call."}</div>
+                    <div className="portal-grid portal-grid--3" style={{ marginTop: "0.85rem" }}>
+                      <div className="portal-card portal-card--soft">
+                        <div className="portal-stat__label">Citizen Profile</div>
+                        <div className="mt-2 text-sm" style={{ color: "var(--text-primary)" }}>{request.citizenRecord?.name || request.citizenSnapshot?.name || "Citizen"}</div>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>Citizen ID: {request.citizenRecord?.citizenId || request.citizenSnapshot?.citizenId || "Unavailable"}</div>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>Aadhaar: {request.citizenRecord?.aadhaar || request.citizenSnapshot?.aadhaar || "Unavailable"}</div>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>Phone: {(request.citizenRecord?.phoneNumbers || request.citizenSnapshot?.phoneNumbers || []).join(", ") || "Unavailable"}</div>
+                      </div>
+                      <div className="portal-card portal-card--soft">
+                        <div className="portal-stat__label">Address & Identity</div>
+                        <div className="text-xs mt-2" style={{ color: "var(--text-secondary)" }}>Age: {request.citizenRecord?.age || request.citizenSnapshot?.age || "Unavailable"}</div>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>Gender: {request.citizenRecord?.gender || request.citizenSnapshot?.gender || "Unavailable"}</div>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>City / State: {[request.citizenRecord?.city || request.citizenSnapshot?.city, request.citizenRecord?.state || request.citizenSnapshot?.state].filter(Boolean).join(", ") || "Unavailable"}</div>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>PIN: {request.citizenRecord?.pinCode || request.citizenSnapshot?.pinCode || "Unavailable"}</div>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>MP: {request.citizenRecord?.mpName || request.citizenSnapshot?.mpName || "Unavailable"}</div>
+                      </div>
+                      <div className="portal-card portal-card--soft">
+                        <div className="portal-stat__label">Case Context</div>
+                        <div className="text-xs mt-2" style={{ color: "var(--text-secondary)" }}>Current owner: {request.currentOwner}</div>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>Referral admin: {request.referralAdminName || "Not specified"}</div>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>Submitted: {request.createdAt ? new Date(request.createdAt).toLocaleString() : "Unavailable"}</div>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>Linked complaint: {request.relatedComplaint?.complaintId || "No linked complaint"}</div>
+                      </div>
+                    </div>
+                    {!!request.attachments?.length && (
+                      <div style={{ marginTop: "0.85rem" }}>
+                        <div className="portal-stat__label" style={{ marginBottom: "0.4rem" }}>Citizen Attachments</div>
+                        <div className="flex flex-wrap gap-2">
+                          {request.attachments.map((file, index) => (
+                            <a
+                              key={`${file.name || "file"}-${index}`}
+                              href={file.data || "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="portal-btn-secondary"
+                            >
+                              {file.name || `Attachment ${index + 1}`}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="w-full md:w-[420px] space-y-3">
                     <textarea
@@ -522,9 +642,16 @@ export default function MeetingsPage() {
                       type="button"
                       onClick={async () => {
                         try {
+                          setError("");
                           const res = await meetingsApi.logVerificationOutcome(request._id, verificationNotes[request._id] || "");
                           setVerificationRequests((current) => current.filter((item) => item._id !== request._id));
                           setMeetings((current) => current.map((item) => (item._id === request._id ? res.meetingRequest : item)));
+                          setVerificationNotes((current) => ({ ...current, [request._id]: "" }));
+                          setVerificationSuccess({
+                            open: true,
+                            title: "Request Sent to Admin",
+                            message: `${request.requestId} has been verified and sent back to the admin for further action.`,
+                          });
                         } catch (err) {
                           setError(err.message || "Failed to update verification");
                         }

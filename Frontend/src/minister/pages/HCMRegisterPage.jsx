@@ -53,7 +53,6 @@ export default function HCMRegisterPage() {
       const [photo] = await filesToDocuments(form.photo ? [form.photo] : []);
       const res = await authApi.register({ ...form, photo: photo || null });
       setCitizenId(res.citizenUniqueId);
-      alert(`Citizen ID generated: ${res.citizenUniqueId}`);
     } catch (err) {
       setError(err.message || "Registration failed");
     } finally {
@@ -70,9 +69,22 @@ export default function HCMRegisterPage() {
           </div>
           <h2 className="auth-title" style={{ margin: "0 0 0.5rem" }}>Registration Successful</h2>
           <p className="auth-subtitle" style={{ margin: "0 0 0.75rem" }}>Your Citizen ID has been generated and linked to your Aadhaar and mobile numbers.</p>
-          <div style={{ padding: "0.85rem 1rem", borderRadius: "12px", background: "rgba(37,99,235,0.12)", border: "1px solid rgba(37,99,235,0.4)", marginBottom: "1.25rem", color: "#e5efff" }}>
-            <div style={{ fontSize: "0.8rem", opacity: 0.9, marginBottom: "0.25rem" }}>Citizen ID</div>
-            <div style={{ fontFamily: "monospace", fontWeight: 800, letterSpacing: "0.08em", fontSize: "1rem" }}>{citizenId}</div>
+          <div
+            style={{
+              padding: "0.9rem 1rem",
+              borderRadius: "14px",
+              background: "rgba(255,255,255,0.9)",
+              border: "1px solid rgba(34,197,94,0.28)",
+              marginBottom: "1.25rem",
+              boxShadow: "0 16px 36px rgba(15, 23, 42, 0.12)",
+            }}
+          >
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#166534", marginBottom: "0.35rem" }}>
+              Citizen ID
+            </div>
+            <div style={{ fontFamily: "monospace", fontWeight: 800, letterSpacing: "0.08em", fontSize: "1.05rem", color: "#0f172a" }}>
+              {citizenId}
+            </div>
           </div>
           <button type="button" onClick={() => navigate("/login")} className="auth-btn auth-btn--success">Go to Login →</button>
         </div>

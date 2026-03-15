@@ -20,13 +20,30 @@ function limitDocumentsForDemo(documents = []) {
   });
 }
 
+function SubmissionModal({ open, title, message, onClose }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center px-4" style={{ background: "rgba(15, 23, 42, 0.58)", backdropFilter: "blur(8px)" }}>
+      <div className="w-full max-w-md rounded-[30px] border p-6 text-center shadow-2xl" style={{ background: "linear-gradient(180deg, var(--bg-primary), color-mix(in srgb, var(--bg-primary) 82%, var(--accent-primary-subtle) 18%))", borderColor: "var(--border-primary)" }}>
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: "linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))", color: "#fff", boxShadow: "var(--shadow-card)" }}>
+          <CheckmarkCircleRegular style={{ fontSize: 34 }} />
+        </div>
+        <div className="portal-page__eyebrow" style={{ justifyContent: "center", marginBottom: "0.7rem" }}>Submission Successful</div>
+        <h3 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>{title}</h3>
+        <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>{message}</p>
+        <button type="button" onClick={onClose} className="portal-btn mt-5 w-full">Continue</button>
+      </div>
+    </div>
+  );
+}
+
 export default function HCMNewCasePage() {
   const [activeTab, setActiveTab] = useState("");
   const [admins, setAdmins] = useState([]);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [successModal, setSuccessModal] = useState({ open: false, title: "", message: "" });
   const [loading, setLoading] = useState(false);
-  const [meetingForm, setMeetingForm] = useState({ purpose: "", preferredDate: "", preferredTime: "", referralAdminUserId: "", files: [] });
+  const [meetingForm, setMeetingForm] = useState({ purpose: "", referralAdminUserId: "", files: [] });
   const [complaintForm, setComplaintForm] = useState({ title: "", details: "", complaintLocation: "", complaintType: "", files: [] });
 
   useEffect(() => {
@@ -37,18 +54,20 @@ export default function HCMNewCasePage() {
     event.preventDefault();
     setLoading(true);
     setError("");
-    setSuccess("");
+    setSuccessModal({ open: false, title: "", message: "" });
     try {
       const attachmentDocs = limitDocumentsForDemo(await filesToDocuments(meetingForm.files));
       const res = await citizenApi.createMeetingRequest({
         purpose: meetingForm.purpose,
-        preferredDate: meetingForm.preferredDate,
-        preferredTime: meetingForm.preferredTime,
         referralAdminUserId: meetingForm.referralAdminUserId,
         attachments: attachmentDocs,
       });
-      setSuccess(`Meeting request ${res.meetingRequest.requestId} submitted`);
-      setMeetingForm({ purpose: "", preferredDate: "", preferredTime: "", referralAdminUserId: "", files: [] });
+      setSuccessModal({
+        open: true,
+        title: "Meeting Submitted",
+        message: `Your meeting request ${res.meetingRequest.requestId} has been submitted successfully.`,
+      });
+      setMeetingForm({ purpose: "", referralAdminUserId: "", files: [] });
     } catch (err) {
       setError(err.message || "Unable to submit meeting request");
     } finally {
@@ -60,7 +79,7 @@ export default function HCMNewCasePage() {
     event.preventDefault();
     setLoading(true);
     setError("");
-    setSuccess("");
+    setSuccessModal({ open: false, title: "", message: "" });
     try {
       validateComplaintFiles(complaintForm.files);
       const attachments = limitDocumentsForDemo(await filesToDocuments(complaintForm.files));
@@ -71,7 +90,11 @@ export default function HCMNewCasePage() {
         complaintType: complaintForm.complaintType,
         attachments,
       });
-      setSuccess(`Complaint ${res.complaint.complaintId} submitted`);
+      setSuccessModal({
+        open: true,
+        title: "Complaint Submitted",
+        message: `Your complaint ${res.complaint.complaintId} has been submitted successfully.`,
+      });
       setComplaintForm({ title: "", details: "", complaintLocation: "", complaintType: "", files: [] });
     } catch (err) {
       setError(err.message || "Unable to submit complaint");
@@ -82,6 +105,12 @@ export default function HCMNewCasePage() {
 
   return (
     <div className="portal-page">
+      <SubmissionModal
+        open={successModal.open}
+        title={successModal.title}
+        message={successModal.message}
+        onClose={() => setSuccessModal((current) => ({ ...current, open: false }))}
+      />
       <div className="portal-page__hero">
         <div className="portal-page__eyebrow">Citizen Services</div>
         <h1 className="portal-page__title">Citizen Service Router</h1>
@@ -91,7 +120,6 @@ export default function HCMNewCasePage() {
       </div>
 
       {error && <div className="portal-alert portal-alert--error"><ErrorCircleRegular /> <span>{error}</span></div>}
-      {success && <div className="portal-alert portal-alert--success"><CheckmarkCircleRegular /> <span>{success}</span></div>}
 
       {!activeTab ? (
         <div className="portal-grid portal-grid--2">
@@ -108,7 +136,7 @@ export default function HCMNewCasePage() {
         </div>
       ) : activeTab === "meeting" ? (
         <form onSubmit={submitMeeting} className="portal-card">
-          <button type="button" onClick={() => { setActiveTab(""); setError(""); setSuccess(""); }} className="portal-link-btn mb-4">← Back to Services</button>
+          <button type="button" onClick={() => { setActiveTab(""); setError(""); setSuccessModal({ open: false, title: "", message: "" }); }} className="portal-link-btn mb-4">← Back to Services</button>
           <h2 className="text-2xl font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Meeting Request</h2>
           <div className="portal-form-grid">
             <div className="portal-field">
@@ -123,14 +151,6 @@ export default function HCMNewCasePage() {
               </select>
             </div>
             <div className="portal-field">
-              <label className="portal-field__label">Preferred Date</label>
-              <input className="portal-input" type="date" value={meetingForm.preferredDate} onChange={(event) => setMeetingForm((current) => ({ ...current, preferredDate: event.target.value }))} />
-            </div>
-            <div className="portal-field">
-              <label className="portal-field__label">Preferred Time</label>
-              <input className="portal-input" type="time" value={meetingForm.preferredTime} onChange={(event) => setMeetingForm((current) => ({ ...current, preferredTime: event.target.value }))} />
-            </div>
-            <div className="portal-field">
               <label className="portal-field__label">Optional Document Upload</label>
               <input className="portal-input" type="file" multiple onChange={(event) => setMeetingForm((current) => ({ ...current, files: sanitizeSelectedFiles(event.target.files) }))} />
               {meetingForm.files.length > 0 && <div className="text-sm" style={{ color: "var(--text-tertiary)" }}>{meetingForm.files.length} file(s) selected</div>}
@@ -142,7 +162,7 @@ export default function HCMNewCasePage() {
         </form>
       ) : (
         <form onSubmit={submitComplaint} className="portal-card">
-          <button type="button" onClick={() => { setActiveTab(""); setError(""); setSuccess(""); }} className="portal-link-btn mb-4">← Back to Services</button>
+          <button type="button" onClick={() => { setActiveTab(""); setError(""); setSuccessModal({ open: false, title: "", message: "" }); }} className="portal-link-btn mb-4">← Back to Services</button>
           <h2 className="text-2xl font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Complaint Submission</h2>
           <div className="portal-form-grid">
             <div className="portal-field">

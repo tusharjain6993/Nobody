@@ -22,11 +22,10 @@ function Section({ title, children, action }) {
 
 function buildMeetingActions(item) {
   const actions = [];
-  if (["submitted", "under_review"].includes(item.status)) actions.push(["verification", "Send for Verification"]);
-  if (["submitted", "under_review"].includes(item.status)) actions.push(["approve", "Approve"]);
-  if (["submitted", "verification_needed", "under_review", "approved"].includes(item.status)) actions.push(["reject", "Reject"]);
-  if (item.status === "approved") actions.push(["revertApproval", "Return to Review"]);
-  if (["approved", "scheduled"].includes(item.status)) actions.push(["schedule", item.status === "scheduled" ? "Reschedule" : "Schedule Meeting"]);
+  if (item.status === "submitted") actions.push(["approve", "Approve"], ["reject", "Reject"]);
+  if (item.status === "approved") actions.push(["verification", "Send for Verification"], ["reject", "Reject"], ["revertApproval", "Return to Start"]);
+  if (item.status === "under_review") actions.push(["schedule", "Schedule Meeting"], ["reject", "Reject"], ["revertApproval", "Return to Start"]);
+  if (item.status === "scheduled") actions.push(["schedule", "Reschedule"]);
   if (item.status === "scheduled" && item.executionStatus === "pending") actions.push(["markCompleted", "Mark Completed"], ["cancel", "Cancel Meeting"]);
   return actions;
 }
@@ -70,7 +69,7 @@ function buildSuccessMessage(itemType, item, action) {
     approve: `${caseId} was approved.`,
     schedule: `${caseId} was scheduled successfully.`,
     reject: `${caseId} was rejected.`,
-    revertApproval: `${caseId} was returned to review.`,
+    revertApproval: `${caseId} was returned to the initial review state.`,
     cancel: `${caseId} was cancelled.`,
     markCompleted: `${caseId} was marked completed.`,
     assign: `${caseId} was assigned to you.`,
@@ -116,6 +115,7 @@ export default function HCMCaseDetailPage() {
   const [resolutionFiles, setResolutionFiles] = useState([]);
   const [meetingForm, setMeetingForm] = useState({
     reviewNotes: "",
+    verificationPriority: "MEDIUM",
     verificationOutcome: "",
     rejectReason: "",
     scheduleDate: "",
@@ -175,10 +175,13 @@ export default function HCMCaseDetailPage() {
       setMeetingForm((current) => ({
         ...current,
         reviewNotes: item.adminNotes || "",
+        verificationPriority: ["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(String(item.priority || "").toUpperCase())
+          ? String(item.priority || "").toUpperCase()
+          : "MEDIUM",
         scheduleDate: item.scheduleDate || "",
         scheduleTime: item.scheduleTime || "",
         scheduleLocation: item.scheduleLocation || "",
-        isVip: item.priority === "VIP" || item.priority === "HIGH",
+        isVip: item.priority === "VIP",
       }));
     } else {
       setComplaintForm((current) => ({
@@ -236,7 +239,7 @@ export default function HCMCaseDetailPage() {
       ["Phone", item.citizenSnapshot?.phoneNumbers?.[0] || ""],
       ["Status", item.statusLabel],
       ["Current owner", item.currentOwner],
-      ["Meeting type", item.priority === "VIP" || item.priority === "HIGH" ? "VIP" : "Standard"],
+      ["Meeting type", item.priority === "VIP" ? "VIP" : "Standard"],
       ["Schedule", item.scheduleDate ? `${item.scheduleDate} ${item.scheduleTime || ""}` : "Pending"],
       ["Location", item.scheduleLocation || ""],
       ["Execution status", item.executionStatusLabel || "Pending"],
@@ -307,14 +310,31 @@ export default function HCMCaseDetailPage() {
 
         {itemType === "meeting" && activeAction === "verification" && (
           <div className="space-y-3">
+            <select
+              value={meetingForm.verificationPriority}
+              onChange={(event) => setMeetingForm((current) => ({ ...current, verificationPriority: event.target.value }))}
+              className={inputClass}
+            >
+              <option value="LOW">Low Priority</option>
+              <option value="MEDIUM">Medium Priority</option>
+              <option value="HIGH">High Priority</option>
+              <option value="CRITICAL">Critical Priority</option>
+            </select>
             <textarea value={meetingForm.reviewNotes} onChange={(event) => setMeetingForm((current) => ({ ...current, reviewNotes: event.target.value }))} rows={3} placeholder="Add DEO verification comment if needed" className={textAreaClass} />
-            <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.markMeetingVerificationNeeded(id, meetingForm.reviewNotes), { stayOnPage: false, successAction: "verification" })} className="portal-btn">Send to DEO Verification</button>
+            <button
+              type="button"
+              disabled={actionLoading}
+              onClick={() => runAction(() => workItemsApi.markMeetingVerificationNeeded(id, { notes: meetingForm.reviewNotes, priority: meetingForm.verificationPriority }), { stayOnPage: false, successAction: "verification" })}
+              className="portal-btn"
+            >
+              Send to DEO Verification
+            </button>
           </div>
         )}
 
         {itemType === "meeting" && activeAction === "approve" && (
           <div className="space-y-3">
-            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Approve this meeting so scheduling becomes available immediately.</p>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Approve this meeting to move it into the verification stage.</p>
             <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.approveMeetingRequest(id, {}), { stayOnPage: false, successAction: "approve" })} className="portal-btn">Approve Request</button>
           </div>
         )}
@@ -340,7 +360,7 @@ export default function HCMCaseDetailPage() {
             <textarea value={meetingForm.actionReason} onChange={(event) => setMeetingForm((current) => ({ ...current, actionReason: event.target.value }))} rows={3} placeholder="Provide the reason or operational note" className={textAreaClass} />
             <div className="flex gap-2 flex-wrap">
               {activeAction === "reject" && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.rejectMeetingRequest(id, meetingForm.actionReason), { stayOnPage: false, successAction: "reject" })} className="portal-btn-danger">Reject Meeting</button>}
-              {activeAction === "revertApproval" && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.revertMeetingApproval(id, meetingForm.actionReason), { stayOnPage: false, successAction: "revertApproval" })} className="portal-btn-danger">Return to Review</button>}
+              {activeAction === "revertApproval" && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.revertMeetingApproval(id, meetingForm.actionReason), { stayOnPage: false, successAction: "revertApproval" })} className="portal-btn-danger">Return to Start</button>}
               {activeAction === "cancel" && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.cancelScheduledMeeting(id, meetingForm.actionReason), { stayOnPage: false, successAction: "cancel" })} className="portal-btn-danger">Cancel Scheduled Meeting</button>}
               {activeAction === "markCompleted" && <button type="button" disabled={actionLoading} onClick={() => runAction(() => workItemsApi.markMeetingCompleted(id, meetingForm.actionReason), { stayOnPage: false, successAction: "markCompleted" })} className="portal-btn">Mark Completed</button>}
             </div>
@@ -443,7 +463,7 @@ export default function HCMCaseDetailPage() {
             <div className="portal-stat__label">{itemType === "meeting" ? "Meeting Setup" : "Complaint Routing"}</div>
             <div className="mt-2 font-semibold" style={{ color: "var(--text-primary)" }}>
               {itemType === "meeting"
-                ? (item.priority === "VIP" || item.priority === "HIGH" ? "VIP Meeting" : "Standard Meeting")
+                ? (item.priority === "VIP" ? "VIP Meeting" : "Standard Meeting")
                 : (item.department || "Pending")}
             </div>
             <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
@@ -451,6 +471,16 @@ export default function HCMCaseDetailPage() {
                 ? (item.scheduleDate ? `${item.scheduleDate} ${item.scheduleTime || ""}` : "Date and time pending")
                 : (item.officerName || item.manualContact || "Officer not selected")}
             </div>
+            {itemType === "meeting" && item.status === "verification_needed" && (
+              <div className="text-xs mt-2" style={{ color: "var(--accent-primary)", fontWeight: 700 }}>
+                Verification in process
+              </div>
+            )}
+            {itemType === "meeting" && item.verificationOutcome && (
+              <div className="text-xs mt-2" style={{ color: "var(--accent-primary)" }}>
+                Verification completed: {item.verificationOutcome}
+              </div>
+            )}
           </div>
         </div>
       </Section>

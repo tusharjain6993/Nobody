@@ -18,8 +18,17 @@ function base64UrlDecode(value) {
 }
 
 async function sha256Hex(value) {
-  const buffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(buffer)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  if (globalThis.crypto?.subtle) {
+    const buffer = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+    return Array.from(new Uint8Array(buffer)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
+  }
+  const normalized = (hash >>> 0).toString(16).padStart(8, "0");
+  return `${normalized}${normalized}${normalized}${normalized}${normalized}${normalized}${normalized}${normalized}`;
 }
 
 function buildPassPayload(meeting) {
