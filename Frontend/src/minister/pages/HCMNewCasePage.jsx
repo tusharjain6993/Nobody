@@ -158,14 +158,14 @@ export default function HCMNewCasePage() {
               <input className="portal-input" value={meetingForm.purpose} onChange={(event) => setMeetingForm((current) => ({ ...current, purpose: event.target.value }))} placeholder="Explain the purpose of your meeting request" />
             </div>
             <div className="portal-field">
-              <label className="portal-field__label">Admin Referral</label>
+              <label className="portal-field__label">Admin Referral (Optional)</label>
               <select className="portal-select" value={meetingForm.referralAdminUserId} onChange={(event) => setMeetingForm((current) => ({ ...current, referralAdminUserId: event.target.value }))}>
-                <option value="">Select admin desk</option>
+                <option value="">Select admin desk (optional)</option>
                 {admins.map((admin) => <option key={admin.id} value={admin.id}>{admin.name} · {admin.department}</option>)}
               </select>
             </div>
             <div className="portal-field">
-              <label className="portal-field__label">Optional Document Upload</label>
+              <label className="portal-field__label">Document Upload (Optional)</label>
               <label className="portal-card portal-card--soft cursor-pointer flex items-center gap-3">
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-full" style={{ background: "var(--accent-primary-subtle)", color: "var(--accent-primary)" }}>
                   <AttachRegular />

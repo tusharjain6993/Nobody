@@ -1053,6 +1053,10 @@ export function queryOne(sql, params = []) {
 }
 
 export function execute(sql, params = []) {
+  const expectedParams = (String(sql).match(/\?/g) || []).length;
+  if (expectedParams !== params.length) {
+    throw new Error(`SQL bind mismatch: expected ${expectedParams}, received ${params.length}`);
+  }
   db.run(sql, params);
   persistDb();
 }

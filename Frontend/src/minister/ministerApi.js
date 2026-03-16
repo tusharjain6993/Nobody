@@ -728,7 +728,6 @@ export const citizenApi = {
         "",
         "",
         "",
-        "",
         "Citizen submitted the request.",
         "pending",
         body.escalatedFromComplaintId ? Number(body.escalatedFromComplaintId) : null,
