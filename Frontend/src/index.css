@@ -373,6 +373,14 @@ img {
   box-shadow: var(--shadow-md);
   color: #fff;
   font-size: 1.05rem;
+  text-decoration: none;
+}
+
+.portal-sidebar__logo-mark:hover,
+.portal-sidebar__logo-mark:focus,
+.portal-sidebar__brand:hover,
+.portal-sidebar__brand:focus {
+  text-decoration: none;
 }
 
 .portal-sidebar__brand {

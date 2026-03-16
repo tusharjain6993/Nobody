@@ -1195,8 +1195,8 @@ export const workItemsApi = {
     const requestId = nextCode("MREQ", "meeting_requests");
     execute(
       `INSERT INTO meeting_requests (
-        requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,assignedAdminUserId,assignedAdminName,attachments,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleEndTime,scheduleLocation,priority,priorityReason,visitorId,meetingDocket,adminNotes,statusReason,executionStatus,escalatedFromComplaintId,createdAt,updatedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,assignedAdminUserId,assignedAdminName,attachments,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleEndTime,scheduleLocation,companions,priority,priorityReason,visitorId,meetingDocket,adminNotes,statusReason,executionStatus,escalatedFromComplaintId,createdAt,updatedAt
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         requestId,
         complaint.citizenId,
@@ -1212,6 +1212,7 @@ export const workItemsApi = {
         "",
         "",
         "",
+        JSON.stringify([]),
         "",
         "",
         "",

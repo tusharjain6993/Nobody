@@ -527,8 +527,8 @@ function insertComplaintRecord(record) {
 function insertMeetingRecord(record) {
   db.run(
     `INSERT INTO meeting_requests (
-      requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,assignedAdminUserId,assignedAdminName,attachments,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleEndTime,scheduleLocation,priority,priorityReason,visitorId,meetingDocket,adminNotes,statusReason,executionStatus,escalatedFromComplaintId,createdAt,updatedAt
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,assignedAdminUserId,assignedAdminName,attachments,attachmentName,attachmentType,attachmentData,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleEndTime,scheduleLocation,companions,priority,priorityReason,visitorId,meetingDocket,adminNotes,statusReason,executionStatus,escalatedFromComplaintId,createdAt,updatedAt
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       record.requestId,
       record.citizenId,
@@ -549,6 +549,7 @@ function insertMeetingRecord(record) {
       record.scheduleTime || "",
       record.scheduleEndTime || "",
       record.scheduleLocation || "",
+      JSON.stringify(record.companions || []),
       record.priority || "",
       record.priorityReason || "",
       record.visitorId || "",
