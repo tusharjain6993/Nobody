@@ -120,7 +120,7 @@ export default function HCMLoginPage() {
           <div className="auth-logo">
             <BuildingBankRegular style={{ fontSize: "1.75rem" }} />
           </div>
-          <h1 className="auth-title">E-PARINAM</h1>
+          <h1 className="auth-title">HCM PORTAl</h1>
           <p className="auth-subtitle">Ministry of Culture • Govt. of India</p>
         </div>
 
