@@ -249,8 +249,7 @@ export default function ProfileSettingsPage() {
     { id: "profile", label: "Profile", icon: FiCamera, description: "Public profile settings" },
     { id: "password", label: "Password", icon: FiLock, description: "Change your password" },
     { id: "team", label: "Team", icon: FiUsers, description: "Team members" },
-    { id: "plan", label: "Plan", icon: FiZap, description: "Your subscription plan" },
-    { id: "billing", label: "Billing", icon: FiCreditCard, description: "Billing information" },
+
   ];
 
   return (
