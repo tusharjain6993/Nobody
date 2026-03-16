@@ -66,6 +66,7 @@ export default function MeetingsPage() {
   const [error, setError] = useState("");
   const [verificationNotes, setVerificationNotes] = useState({});
   const [verificationSuccess, setVerificationSuccess] = useState({ open: false, title: "", message: "" });
+  const [eventSuccess, setEventSuccess] = useState({ open: false, title: "", message: "" });
   const [verificationSearch, setVerificationSearch] = useState("");
   const [form, setForm] = useState({
     title: "",
@@ -512,6 +513,11 @@ export default function MeetingsPage() {
       const documentDocs = await filesToDocuments(documents);
       const res = await calendarApi.create({ ...form, photos: photoDocs, documents: documentDocs });
       setEvents((current) => [res.event, ...current]);
+      setEventSuccess({
+        open: true,
+        title: "Event Created",
+        message: `${res.event.title} has been created and sent to the minister calendar.`,
+      });
       setForm({
         title: "",
         details: "",
@@ -547,6 +553,12 @@ export default function MeetingsPage() {
         title={verificationSuccess.title}
         message={verificationSuccess.message}
         onClose={() => setVerificationSuccess({ open: false, title: "", message: "" })}
+      />
+      <SuccessModal
+        open={eventSuccess.open}
+        title={eventSuccess.title}
+        message={eventSuccess.message}
+        onClose={() => setEventSuccess({ open: false, title: "", message: "" })}
       />
       <div>
         <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-1">
@@ -678,7 +690,14 @@ export default function MeetingsPage() {
       )}
 
       {!isVerificationRoute && (
-      <form onSubmit={createEvent} className="bg-white rounded-2xl border border-slate-100 shadow-3d p-4 grid md:grid-cols-2 gap-3">
+      <form onSubmit={createEvent} className="portal-card grid md:grid-cols-2 gap-3">
+        <div className="md:col-span-2">
+          <div className="portal-page__eyebrow">DEO Event Desk</div>
+          <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>Register Event</h2>
+          <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+            Create an event entry here. Once submitted, it is added to the DEO calendar and propagated to the minister calendar.
+          </p>
+        </div>
         <input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="Event title" className={inputClass} />
         <select value={form.eventType} onChange={(event) => setForm((current) => ({ ...current, eventType: event.target.value }))} className={inputClass}>
           <option>Invited Event</option>
@@ -704,7 +723,11 @@ export default function MeetingsPage() {
         </select>
         <input type="file" multiple accept=".png,.jpg,.jpeg,.webp" onChange={(event) => setPhotos(Array.from(event.target.files || []))} className={`${inputClass} md:col-span-2`} />
         <input type="file" multiple onChange={(event) => setDocuments(Array.from(event.target.files || []))} className={`${inputClass} md:col-span-2`} />
-        <button type="submit" className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold text-sm md:col-span-2">Create Calendar Entry</button>
+        <div className="md:col-span-2 pt-2">
+          <button type="submit" className="portal-btn w-full">
+            Register Event & Send to Calendar
+          </button>
+        </div>
       </form>
       )}
 
