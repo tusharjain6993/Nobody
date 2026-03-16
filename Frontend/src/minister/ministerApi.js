@@ -720,9 +720,7 @@ export const citizenApi = {
         "",
         "",
         "",
-        "",
         JSON.stringify((body.companions || []).filter((item) => item?.name || item?.phone)),
-        "",
         "",
         "",
         "",
@@ -1196,7 +1194,7 @@ export const workItemsApi = {
     execute(
       `INSERT INTO meeting_requests (
         requestId,citizenId,citizenSnapshot,purpose,referralAdminUserId,referralAdminName,assignedAdminUserId,assignedAdminName,attachments,status,verificationOutcome,rejectReason,scheduleDate,scheduleTime,scheduleEndTime,scheduleLocation,companions,priority,priorityReason,visitorId,meetingDocket,adminNotes,statusReason,executionStatus,escalatedFromComplaintId,createdAt,updatedAt
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         requestId,
         complaint.citizenId,
@@ -1212,9 +1210,9 @@ export const workItemsApi = {
         "",
         "",
         "",
+        "",
+        "",
         JSON.stringify([]),
-        "",
-        "",
         "",
         "",
         "",
