@@ -720,6 +720,8 @@ export const citizenApi = {
         "",
         "",
         "",
+        "",
+        "",
         JSON.stringify((body.companions || []).filter((item) => item?.name || item?.phone)),
         "",
         "",
