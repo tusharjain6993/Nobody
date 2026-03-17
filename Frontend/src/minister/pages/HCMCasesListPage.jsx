@@ -212,9 +212,11 @@
 // }
 
 
+
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { workItemsApi } from "../ministerApi";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 function isComplaintQueueItem(item) {
   return !item.assignedAdminUserId && !["resolved", "completed"].includes(item.status);
@@ -257,10 +259,10 @@ export default function HCMCasesListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState("complaints");
-  
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 8; // Adjust items per page as needed
+  const ITEMS_PER_PAGE = 10;
 
   const [filters, setFilters] = useState({
     q: "",
@@ -334,6 +336,37 @@ export default function HCMCasesListPage() {
   const totalPages = Math.ceil(rows.length / ITEMS_PER_PAGE);
   const paginatedRows = rows.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
+  // Generate page numbers for pagination display
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= maxVisible; i++) {
+          pages.push(i);
+        }
+        pages.push("...", totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1, "...");
+        for (let i = totalPages - maxVisible + 1; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        pages.push(1, "...");
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+          pages.push(i);
+        }
+        pages.push("...", totalPages);
+      }
+    }
+    return pages;
+  };
+
   return (
     <div className="portal-page">
       <div className="portal-tabs">
@@ -357,20 +390,40 @@ export default function HCMCasesListPage() {
         ))}
       </div>
 
+      {/* Filter Section */}
       <div className="portal-card">
         <div className="grid md:grid-cols-4 gap-4">
-          <input value={filters.q} onChange={(event) => setFilters((current) => ({ ...current, q: event.target.value }))} placeholder="Search title, ID, citizen, status, owner..." className="portal-input" />
-          <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))} className="portal-input">
+          <input
+            value={filters.q}
+            onChange={(event) => setFilters((current) => ({ ...current, q: event.target.value }))}
+            placeholder="Search title, ID, citizen, status, owner..."
+            className="portal-input"
+          />
+          <select
+            value={filters.status}
+            onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
+            className="portal-input"
+          >
             <option value="all">All statuses</option>
             {statusOptions.map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}
           </select>
-          <input value={filters.caseId} onChange={(event) => setFilters((current) => ({ ...current, caseId: event.target.value }))} placeholder="Complaint / Request ID" className="portal-input" />
-          <input value={filters.citizenId} onChange={(event) => setFilters((current) => ({ ...current, citizenId: event.target.value.toUpperCase() }))} placeholder="Citizen ID" className="portal-input" />
+          <input
+            value={filters.caseId}
+            onChange={(event) => setFilters((current) => ({ ...current, caseId: event.target.value }))}
+            placeholder="Complaint / Request ID"
+            className="portal-input"
+          />
+          <input
+            value={filters.citizenId}
+            onChange={(event) => setFilters((current) => ({ ...current, citizenId: event.target.value.toUpperCase() }))}
+            placeholder="Citizen ID"
+            className="portal-input"
+          />
         </div>
       </div>
 
       {error && <div className="portal-alert portal-alert--error">{error}</div>}
-      
+
       {loading ? (
         <div className="portal-card portal-empty">Loading work queue…</div>
       ) : rows.length === 0 ? (
@@ -379,117 +432,111 @@ export default function HCMCasesListPage() {
         </div>
       ) : (
         <div className="portal-card flex flex-col" style={{ padding: 0, overflow: "hidden" }}>
-          
-          {/* 🟢 HORIZONTAL SCROLL WRAPPER */}
-          <div className="overflow-x-auto w-full custom-scrollbar">
-            
-            {/* 🟢 TABLE CONTAINER (Generous Fixed Min Width) */}
-            <div style={{ minWidth: "1500px" }}>
-              
-              {/* TABLE HEADER (Matches Screenshot style) */}
-              <div 
-                className="grid gap-4 items-center px-6 py-4 border-b text-[11px] font-bold uppercase tracking-wider"
-                style={{ 
-                  gridTemplateColumns: "140px minmax(200px, 1fr) 150px 130px 120px 140px 150px 100px 100px 100px",
-                  borderColor: "var(--border-secondary)", 
-                  background: "#f8fafc", 
-                  color: "var(--text-tertiary)" 
-                }}
-              >
-                <div>Complaint No</div>
-                <div>Title</div>
-                <div>Name</div>
-                <div>Citizen ID</div>
-                <div>Mob No</div>
-                <div>Pool/Assigned</div>
-                <div>Owner</div>
-                <div>Created</div>
-                <div className="text-center">Status</div>
-                <div className="text-right">Actions</div>
-              </div>
+
+          {/* 🟢 Table Container with Horizontal Scroll */}
+          <div className="overflow-x-auto custom-scrollbar w-full">
+            <table className="w-full border-collapse whitespace-nowrap" style={{ borderColor: "var(--border-secondary)" }}>
+
+              {/* TABLE HEADER */}
+              <thead className="sticky top-0 z-10" style={{ background: "#f8fafc" }}>
+                <tr style={{ borderBottom: "1px solid var(--border-secondary)" }}>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "140px", minWidth: "140px" }}>Complaint No</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "220px", minWidth: "220px" }}>Title</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "150px", minWidth: "150px" }}>Name</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "140px", minWidth: "140px" }}>Citizen ID</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "130px", minWidth: "130px" }}>Mobile No</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "160px", minWidth: "160px" }}>Pool/Assigned</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "140px", minWidth: "140px" }}>Owner</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "110px", minWidth: "110px" }}>Created</th>
+                  <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "120px", minWidth: "120px" }}>Status</th>
+                  <th className="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "180px", minWidth: "180px" }}>Actions</th>
+                </tr>
+              </thead>
 
               {/* TABLE BODY */}
-              <div className="flex flex-col bg-white">
-                {paginatedRows.map((item) => (
-                  <div 
-                    key={`${tab}-${item._id}`} 
-                    className="grid gap-4 items-center px-6 py-4 border-b text-sm transition-colors hover:bg-slate-50"
-                    style={{ 
-                      gridTemplateColumns: "140px minmax(200px, 1fr) 150px 130px 120px 140px 150px 100px 100px 220px", 
-                      borderColor: "var(--border-secondary)",
-                      color: "var(--text-primary)" 
+              <tbody className="bg-white">
+                {paginatedRows.map((item, idx) => (
+                  <tr
+                    key={`${tab}-${item._id}`}
+                    style={{
+                      borderBottom: "1px solid var(--border-secondary)",
+                      backgroundColor: idx % 2 === 0 ? "#ffffff" : "#f9fafb"
                     }}
+                    className="hover:bg-blue-50 transition-colors duration-200"
                   >
-                    
-                    {/* Complaint No */}
-                    <div>
-                      <span className="font-semibold text-blue-600">
-                        {item.complaintId || item.requestId}
-                      </span>
-                      {item.priority === "VIP" && (
-                         <span className="ml-2 bg-red-100 text-red-700 font-bold px-1.5 py-0.5 rounded text-[10px]">VIP</span>
-                      )}
-                    </div>
-                    
-                    {/* Title */}
-                    <div className="font-semibold truncate" title={item.title || item.purpose}>
-                      {item.title || item.purpose}
+
+                    {/* Complaint No - with VIP Badge */}
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-blue-600">{item.complaintId || item.requestId}</span>
+                        {item.priority === "VIP" && (
+                          <span className="bg-red-100 text-red-700 font-bold px-2 py-0.5 rounded text-[10px] whitespace-nowrap">VIP</span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Title with Related Link */}
+                    <td className="px-4 py-3 text-sm">
+                      <div className="font-semibold truncate max-w-[200px]" title={item.title || item.purpose}>
+                        {item.title || item.purpose}
+                      </div>
                       {(item.relatedComplaint || item.relatedMeeting) && (
-                        <div className="text-[11px] mt-1 font-normal text-gray-500">
-                          {item.relatedComplaint && `Linked: ${item.relatedComplaint.complaintId}`}
-                          {item.relatedMeeting && `Linked: ${item.relatedMeeting.requestId}`}
+                        <div className="text-[10px] font-medium text-gray-500 mt-1">
+                          {item.relatedComplaint && `📎 ${item.relatedComplaint.complaintId}`}
+                          {item.relatedMeeting && `📎 ${item.relatedMeeting.requestId}`}
                         </div>
                       )}
-                    </div>
-                    
-                    {/* Name */}
-                    <div className="truncate" title={item.citizenSnapshot?.name}>
-                      {item.citizenSnapshot?.name || "N/A"}
-                    </div>
-                    
-                    {/* Citizen ID */}
-                    <div className="text-gray-500">
-                      {item.citizenSnapshot?.citizenId || "N/A"}
-                    </div>
-                    
-                    {/* Mobile No */}
-                    <div className="text-gray-500">
-                      {item.citizenSnapshot?.phoneNumbers?.[0] || "N/A"}
-                    </div>
-                    
-                    {/* Pool Item / Assigned */}
-                    <div className="text-gray-500 font-medium truncate">
-                      {item.complaintId ? (item.assignedAdminName ? `Assigned: ${item.assignedAdminName}` : "Pool item") : "Meeting"}
-                    </div>
-                    
-                    {/* Owner */}
-                    <div className="text-gray-500 truncate" title={item.currentOwner}>
-                      {item.currentOwner || "N/A"}
-                    </div>
-                    
-                    {/* Created Date */}
-                    <div className="text-gray-500">
-                      {new Date(item.createdAt).toLocaleDateString()}
-                    </div>
+                    </td>
 
-                    {/* Status (Pooled) - Matching Screenshot style */}
-                    <div className="flex justify-center">
-                      <span className="bg-slate-100 text-slate-600 font-semibold px-3 py-1 rounded-full text-xs whitespace-nowrap">
+                    {/* Name */}
+                    <td className="px-4 py-3 text-sm truncate max-w-[140px] text-gray-700" title={item.citizenSnapshot?.name}>
+                      {item.citizenSnapshot?.name || "N/A"}
+                    </td>
+
+                    {/* Citizen ID */}
+                    <td className="px-4 py-3 text-sm font-medium text-gray-600">
+                      {item.citizenSnapshot?.citizenId || "N/A"}
+                    </td>
+
+                    {/* Mobile No */}
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {item.citizenSnapshot?.phoneNumbers?.[0] || "N/A"}
+                    </td>
+
+                    {/* Pool/Assigned */}
+                    <td className="px-4 py-3 text-sm font-medium truncate max-w-[150px]" title={item.assignedAdminName || "Pool item"}>
+                      {item.complaintId ? (item.assignedAdminName ? `✓ ${item.assignedAdminName}` : "📋 Pool") : "📅 Meeting"}
+                    </td>
+
+                    {/* Owner */}
+                    <td className="px-4 py-3 text-sm text-gray-600 truncate max-w-[130px]" title={item.currentOwner}>
+                      {item.currentOwner || "N/A"}
+                    </td>
+
+                    {/* Created Date */}
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {new Date(item.createdAt).toLocaleDateString("en-IN")}
+                    </td>
+
+                    {/* Status Badge */}
+                    <td className="px-4 py-3 text-center">
+                      <span className="bg-slate-100 text-slate-700 font-semibold px-3 py-1.5 rounded-full text-[11px] whitespace-nowrap inline-block">
                         {item.statusLabel || "Pooled"}
                       </span>
-                    </div>
+                    </td>
 
-                    {/* Actions - Original Size and Classes */}
-                    <div className="flex items-center justify-end gap-3">
-                      <button 
+                    {/* Actions */}
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
                         type="button" 
                         onClick={() => navigate(`/cases/${item.complaintId ? "complaint" : "meeting"}/${item._id}`)} 
-                        className="portal-btn-secondary whitespace-nowrap"
+                        className="px-4 py-2 bg-white border border-gray-300 text-gray-800 rounded-md hover:bg-gray-100 hover:text-blue-600 hover:border-blue-300 font-bold text-[12px] transition-all shadow-sm cursor-pointer"
                       >
-                        Open Record
+                        View
                       </button>
-                      {!!item.complaintId && !item.assignedAdminUserId && (
-                        <button
+                        {!!item.complaintId && !item.assignedAdminUserId && (
+                          <button
                           type="button"
                           onClick={async () => {
                             const res = await workItemsApi.assignComplaintToSelf(item._id);
@@ -498,49 +545,262 @@ export default function HCMCasesListPage() {
                               complaints: current.complaints.map((row) => (row._id === item._id ? res.complaint : row)),
                             }));
                           }}
-                          className="portal-btn whitespace-nowrap"
+                          className="px-4 py-2 bg-blue-600 border border-gray-300 text-gray-900 rounded-md hover:bg-blue-700 font-bold text-[12px] transition-all shadow-sm shadow-blue-200 cursor-pointer"
                         >
-                          Assign to Me
+                          Assign To Me
                         </button>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    </td>
 
-                  </div>
+                  </tr>
                 ))}
-              </div>
-            </div>
+              </tbody>
+            </table>
           </div>
-            
-          {/* 🟢 PAGINATION CONTROLS */}
+
+          {/* PAGINATION CONTROLS */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t" style={{ borderColor: "var(--border-secondary)" }}>
+
+              {/* Left: Previous Button */}
               <button
                 type="button"
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="portal-btn-secondary disabled:opacity-50"
+                className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
+                <ChevronLeft size={16} />
                 Previous
               </button>
-              <span className="text-sm font-semibold text-gray-500">
-                Page {currentPage} of {totalPages}
-              </span>
+
+              {/* Center: Page Numbers */}
+              <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar">
+                {getPageNumbers().map((page, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    disabled={page === "..."}
+                    onClick={() => typeof page === "number" && setCurrentPage(page)}
+                    className={`
+                      px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                      ${page === "..."
+                        ? "cursor-default text-gray-400"
+                        : currentPage === page
+                          ? "bg-blue-600 text-white"
+                          : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer"
+                      }
+                    `}
+                  >
+                    {page}
+                  </button>
+                ))}
+              </div>
+
+              {/* Right: Next Button */}
               <button
                 type="button"
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                className="portal-btn-secondary disabled:opacity-50"
+                className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-900 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 Next
+                <ChevronRight size={16} />
               </button>
+
             </div>
           )}
-            
+
         </div>
-      )}
-      
-      {/* Scrollbar styling for smooth horizontal scroll */}
-      <style dangerouslySetInnerHTML={{__html: `
+      )} : rows.length === 0 ? (
+      <div className="portal-card portal-empty">
+        <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>No items found for the current filters.</p>
+      </div>
+      ) : (
+      <div className="portal-card flex flex-col" style={{ padding: 0, overflow: "hidden" }}>
+
+        {/* Table Container with Proper Structure */}
+        <table className="w-full border-collapse" style={{ borderColor: "var(--border-secondary)" }}>
+
+          {/* TABLE HEADER */}
+          <thead className="sticky top-0 z-10" style={{ background: "#f8fafc" }}>
+            <tr style={{ borderBottom: "1px solid var(--border-secondary)" }}>
+              <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "140px", minWidth: "140px" }}>Complaint No</th>
+              <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "220px", minWidth: "220px" }}>Title</th>
+              <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "150px", minWidth: "150px" }}>Name</th>
+              <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "140px", minWidth: "140px" }}>Citizen ID</th>
+              <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "130px", minWidth: "130px" }}>Mobile No</th>
+              <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "160px", minWidth: "160px" }}>Pool/Assigned</th>
+              <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "140px", minWidth: "140px" }}>Owner</th>
+              <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "110px", minWidth: "110px" }}>Created</th>
+              <th className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "120px", minWidth: "120px" }}>Status</th>
+              <th className="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-wider text-gray-500" style={{ width: "180px", minWidth: "180px" }}>Actions</th>
+            </tr>
+          </thead>
+
+          {/* TABLE BODY */}
+          <tbody className="bg-white">
+            {paginatedRows.map((item, idx) => (
+              <tr
+                key={`${tab}-${item._id}`}
+                style={{
+                  borderBottom: "1px solid var(--border-secondary)",
+                  backgroundColor: idx % 2 === 0 ? "#ffffff" : "#f9fafb"
+                }}
+                className="hover:bg-blue-50 transition-colors duration-200"
+              >
+
+                {/* Complaint No - with VIP Badge */}
+                <td className="px-4 py-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-blue-600">{item.complaintId || item.requestId}</span>
+                    {item.priority === "VIP" && (
+                      <span className="bg-red-100 text-red-700 font-bold px-2 py-0.5 rounded text-[10px] whitespace-nowrap">VIP</span>
+                    )}
+                  </div>
+                </td>
+
+                {/* Title with Related Link */}
+                <td className="px-4 py-3 text-sm">
+                  <div className="font-semibold truncate" title={item.title || item.purpose}>
+                    {item.title || item.purpose}
+                  </div>
+                  {(item.relatedComplaint || item.relatedMeeting) && (
+                    <div className="text-[10px] font-medium text-gray-500 mt-1">
+                      {item.relatedComplaint && `📎 ${item.relatedComplaint.complaintId}`}
+                      {item.relatedMeeting && `📎 ${item.relatedMeeting.requestId}`}
+                    </div>
+                  )}
+                </td>
+
+                {/* Name */}
+                <td className="px-4 py-3 text-sm truncate text-gray-700" title={item.citizenSnapshot?.name}>
+                  {item.citizenSnapshot?.name || "N/A"}
+                </td>
+
+                {/* Citizen ID */}
+                <td className="px-4 py-3 text-sm font-medium text-gray-600">
+                  {item.citizenSnapshot?.citizenId || "N/A"}
+                </td>
+
+                {/* Mobile No */}
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {item.citizenSnapshot?.phoneNumbers?.[0] || "N/A"}
+                </td>
+
+                {/* Pool/Assigned */}
+                <td className="px-4 py-3 text-sm font-medium truncate" title={item.assignedAdminName || "Pool item"}>
+                  {item.complaintId ? (item.assignedAdminName ? `✓ ${item.assignedAdminName}` : "📋 Pool") : "📅 Meeting"}
+                </td>
+
+                {/* Owner */}
+                <td className="px-4 py-3 text-sm text-gray-600 truncate" title={item.currentOwner}>
+                  {item.currentOwner || "N/A"}
+                </td>
+
+                {/* Created Date */}
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {new Date(item.createdAt).toLocaleDateString("en-IN")}
+                </td>
+
+                {/* Status Badge */}
+                <td className="px-4 py-3 text-center">
+                  <span className="bg-slate-100 text-slate-700 font-semibold px-3 py-1.5 rounded-full text-[11px] whitespace-nowrap inline-block">
+                    {item.statusLabel || "Pooled"}
+                  </span>
+                </td>
+
+                {/* Actions */}
+                <td className="px-4 py-3 text-sm">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/cases/${item.complaintId ? "complaint" : "meeting"}/${item._id}`)}
+                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors"
+                    >
+                      View
+                    </button>
+                    {!!item.complaintId && !item.assignedAdminUserId && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const res = await workItemsApi.assignComplaintToSelf(item._id);
+                          setData((current) => ({
+                            ...current,
+                            complaints: current.complaints.map((row) => (row._id === item._id ? res.complaint : row)),
+                          }));
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm transition-colors"
+                      >
+                        Assign
+                      </button>
+                    )}
+                  </div>
+                </td>
+
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* PAGINATION CONTROLS */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t" style={{ borderColor: "var(--border-secondary)" }}>
+
+            {/* Left: Previous Button */}
+            <button
+              type="button"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft size={16} />
+              Previous
+            </button>
+
+            {/* Center: Page Numbers */}
+            <div className="flex items-center gap-1">
+              {getPageNumbers().map((page, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  disabled={page === "..."}
+                  onClick={() => typeof page === "number" && setCurrentPage(page)}
+                  className={`
+                      px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                      ${page === "..."
+                      ? "cursor-default text-gray-400"
+                      : currentPage === page
+                        ? "bg-blue-600 text-white"
+                        : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }
+                    `}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+
+            {/* Right: Next Button */}
+            <button
+              type="button"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+
+          </div>
+        )}
+
+      </div>
+      )
+
+      {/* Scrollbar Styling */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
         .custom-scrollbar::-webkit-scrollbar { height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
